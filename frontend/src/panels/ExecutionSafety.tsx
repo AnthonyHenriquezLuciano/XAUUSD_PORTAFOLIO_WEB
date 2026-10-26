@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { api } from "../api";
 import { useApp } from "../store";
 import { riskSnapshot } from "../premium/risk";
+import { MetricCard } from "../components/DashboardPrimitives";
 import type { CommandRow } from "../premium/commandGuard";
 type Audit = { rows: CommandRow[]; pending: CommandRow[]; blocked: boolean; explained: string; oldestAgeSec: number; recentFailures: number; advisory: string };
 const date = (v?:string|null) => v ? new Date(v).toLocaleString("es-DO") : "—";
@@ -41,11 +42,15 @@ export default function ExecutionSafety() {
     </div>
     {s.broker!=="cloud" && <div className="premium-warn">La conciliación del EA remoto se consulta exclusivamente en cuentas conectadas a Supabase. La simulación no ejecuta órdenes reales.</div>}
     {s.broker==="cloud" && !authorised && <div className="premium-warn">Necesitas el permiso de propietario u operador para consultar los comandos de esta cuenta.</div>}
-    <div className="safety-metrics">
-      {stat("Puente MT5",s.ea?.online?"Conectado":"Sin conexión")}
-      {stat("Comandos por conciliar",audit?String(audit.pending.length):"Sin verificar")}
-      {stat("Exposición al SL*",risk.exposure.withoutStop?"No acotada":risk.exposure.atStop.toFixed(2)+" USD")}
-      {stat("Presupuesto estimado*",risk.budget==null?"No disponible":risk.budget.toFixed(2)+" USD")}
+    <div className="institutional-metric-grid">
+      <MetricCard label="Puente MT5" value={s.ea?.online?"Conectado":"Sin conexión"}
+        tone={s.ea?.online?"positive":"caution"} evidence="direct" />
+      <MetricCard label="Órdenes sin confirmar" value={audit?audit.pending.length:"—"}
+        tone={audit?.blocked||!audit?"caution":"positive"} evidence={audit?"direct":"unverified"} />
+      <MetricCard label="Exposición al SL*" value={risk.exposure.withoutStop?"No acotada":risk.exposure.atStop.toFixed(2)+" USD"}
+        tone={risk.exposure.withoutStop?"negative":"neutral"} evidence="estimated" />
+      <MetricCard label="Margen estimado*" value={risk.budget==null?"No disponible":risk.budget.toFixed(2)+" USD"}
+        evidence="estimated" />
     </div>
     {error && <div className="premium-warn">No es posible comprobar órdenes pendientes. Considera cualquier entrada anterior como potencialmente ejecutada. {error}</div>}
     {audit && <section className="safety-ledger">
