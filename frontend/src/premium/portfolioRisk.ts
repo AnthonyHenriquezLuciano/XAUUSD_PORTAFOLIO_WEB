@@ -45,7 +45,7 @@ export function portfolioTotals(rows:PortfolioRow[]) {
  const usd=rows.filter(x=>x.currency==="USD");
  const sum=(key:"balance"|"equity"|"dailyBuffer"|"maxBuffer"|"stopRisk")=>{
    const a=usd.map(x=>x[key]);
-   return a.some(x=>x===null)?null:a.reduce((s,x)=>s+(x||0),0);
+   return a.some(x=>x===null)?null:a.reduce<number>((total,x)=>total+(x??0),0);
  };
  return {
    accounts:rows.length,usdAccounts:usd.length,excluded:rows.length-usd.length,connected:rows.filter(x=>x.connected).length,
