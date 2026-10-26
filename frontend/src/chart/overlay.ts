@@ -216,6 +216,16 @@ export class ChartOverlay implements ISeriesPrimitive<Time> {
     const tags: { y: number; draw: (y: number) => void }[] = [];
     // Previous-week anchors are not provided by the legacy levels overlay.
     // Render them separately from volume estimates; do not duplicate PDH/PDL.
+    if (d.flowLayers?.profile && d.flowFocus !== "inefficiency" && d.flowFocus !== "structure" && d.flow?.profile?.vwapBands) {
+      const labels=["VWAP −2σ","VWAP −1σ","VWAP +1σ","VWAP +2σ"];
+      d.flow.profile.vwapBands.forEach((price,i)=>{
+        const y=this.y(price);
+        if(y==null || !Number.isFinite(y) || y<12 || y>H-14)return;
+        ctx.strokeStyle=alpha("#bda78a",.22);ctx.lineWidth=1;ctx.setLineDash([3,7]);
+        ctx.beginPath();ctx.moveTo(0,Math.floor(y)+.5);ctx.lineTo(W-105,Math.floor(y)+.5);ctx.stroke();ctx.setLineDash([]);
+        tags.push({y,draw:(yy)=>pill(ctx,W-5,yy,labels[i]+" "+price.toFixed(2),th.tagBg,"#bda78a","right",alpha("#bda78a",.25))});
+      });
+    }
     if (d.flow && d.flowFocus !== "volume" && d.flowFocus !== "inefficiency") {
       for (const l of d.flow.levels.filter(x=>x.key==="PWH"||x.key==="PWL")) {
         const y=this.y(l.price);

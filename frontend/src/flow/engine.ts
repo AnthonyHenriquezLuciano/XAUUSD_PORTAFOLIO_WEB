@@ -12,13 +12,15 @@ export type FlowBin = { low: number; high: number; price: number; volume: number
 export type FlowProfile = {
   start: number; end: number; min: number; max: number; poc: number; vah: number; val: number;
   total: number; bars: number; coverage: number; bins: FlowBin[]; vwap: number | null;
+  vwapSigma: number|null; vwapBands: number[];
   hvn: number[]; lvn: number[]; method: "MT5_TICK_VOLUME_OHLC_UNIFORM";
 };
+export type Sweep = { time:number; side:"high"|"low"; level:number; rejection:number; timeframe:"M5" };
 export type Gap = { id: string; side: 1 | -1; start: number; last: number; lo: number; hi: number; state: "open" | "partial" | "filled"; size: number };
 export type FlowLevel = { key: string; label: string; price: number; source: string; side: "above" | "below" | "at" };
 export type FlowResponse = {
   ok: boolean; mode: FlowMode; scope: FlowScope; title: string; profile: FlowProfile | null;
-  levels: FlowLevel[]; gaps: Gap[]; price: number | null; vwap: number | null;
+  levels: FlowLevel[]; gaps: Gap[]; sweeps: Sweep[]; price: number | null; vwap: number | null;
   direction: "above_poc" | "below_poc" | "at_poc" | "unknown";
   evidence: string[]; quality: { validBars: number; withVolume: number; coveragePct: number; cutoff: number; disclaimer: string };
 };
@@ -30,14 +32,16 @@ export function volumeProfile(st: BarStore, start: number, end: number, cutoff: 
   const nBins = Math.round(clamp(count, 24, 128));
   const from = lowerBound(st.ts, start);
   const to = Math.min(st.length, lowerBound(st.ts, Math.min(end, cutoff + 1)));
-  let min = Infinity, max = -Infinity, valid = 0, withVol = 0, weighted = 0, total = 0;
+  let min = Infinity, max = -Infinity, valid = 0, withVol = 0, weighted = 0, weightedSquare = 0, total = 0;
   for (let i = from; i < to; i++) {
     const h = st.h[i], l = st.l[i], v = st.vol[i];
     if (!Number.isFinite(h) || !Number.isFinite(l) || h < l) continue;
     valid++;
     if (!(Number.isFinite(v) && v > 0)) continue;
     withVol++; min = Math.min(min, l); max = Math.max(max, h);
-    weighted += (st.h[i] + st.l[i] + st.c[i]) / 3 * v;
+    const typical = (st.h[i] + st.l[i] + st.c[i]) / 3;
+    weighted += typical * v;
+    weightedSquare += typical * typical * v;
     total += v;
   }
   if (withVol < 2 || !(total > 0) || !(max >= min)) return null;
@@ -78,11 +82,13 @@ export function volumeProfile(st: BarStore, start: number, end: number, cutoff: 
     return { low: min + j * size, high: min + (j + 1) * size, price: p, volume: vol, share: vol / total,
       node: peak ? "HVN" : valley ? "LVN" : null };
   });
+  const vwap = weighted / total;
+  const vwapSigma = Math.sqrt(Math.max(0, weightedSquare / total - vwap * vwap));
   return {
     start, end: Math.min(end, cutoff + 1), min: round(min), max: round(max),
     poc: round(bins[pocIdx].price), val: round(bins[left].low), vah: round(bins[right].high),
     total, bars: valid, coverage: valid ? withVol / valid : 0, bins,
-    vwap: round(weighted / total), hvn: bins.filter(b => b.node === "HVN").sort((a,b)=>b.volume-a.volume).slice(0,5).map(x=>round(x.price)),
+    vwap: round(vwap), vwapSigma:round(vwapSigma),vwapBands:[-2,-1,1,2].map(k=>round(vwap+k*vwapSigma)), hvn: bins.filter(b => b.node === "HVN").sort((a,b)=>b.volume-a.volume).slice(0,5).map(x=>round(x.price)),
     lvn: bins.filter(b => b.node === "LVN").sort((a,b)=>a.volume-b.volume).slice(0,5).map(x=>round(x.price)),
     method: "MT5_TICK_VOLUME_OHLC_UNIFORM"
   };
@@ -132,6 +138,21 @@ export function fairValueGaps(st: BarStore, cutoff: number, tfMin = 5, maxGaps =
   return candidates.slice(-Math.round(clamp(maxGaps, 1, 30)));
 }
 
+export function detectSweeps(st:BarStore, cutoff:number, tfMin=5, maxSweeps=10):Sweep[] {
+  const candles=st.tf(tfMin) as {time:number;open:number;high:number;low:number;close:number}[];
+  const out:Sweep[]=[];
+  for(let i=Math.max(20,candles.length-180);i<candles.length;i++){
+    const bar=candles[i];
+    if(bar.time+tfMin*60 > cutoff+60)break;
+    let high=-Infinity,low=Infinity;
+    for(let j=i-16;j<i;j++){ high=Math.max(high,candles[j].high);low=Math.min(low,candles[j].low); }
+    // Classic rejection, not evidence of exchange stop orders.
+    if(bar.high>high && bar.close<high && bar.close<bar.open)out.push({time:bar.time,side:"high",level:round(high),rejection:round(bar.high-high),timeframe:"M5"});
+    else if(bar.low<low && bar.close>low && bar.close>bar.open)out.push({time:bar.time,side:"low",level:round(low),rejection:round(low-bar.low),timeframe:"M5"});
+  }
+  return out.slice(-maxSweeps);
+}
+
 export function buildFlow(st: BarStore, now: number, opts: {
   mode?: FlowMode; scope?: FlowScope; start?: number; end?: number;
   brokerOffsetSec?: number | null; bins?: number; cutoff?: number
@@ -166,6 +187,7 @@ export function buildFlow(st: BarStore, now: number, opts: {
   }
   const profile = volumeProfile(st, start, end, cutoff, opts.bins ?? 64);
   const gaps = fairValueGaps(st, cutoff, 5, 12);
+  const sweeps = detectSweeps(st, cutoff, 5, 12);
   const levels: FlowLevel[] = [];
   const add = (key: string, label: string, value: number, source: string) => {
     if (Number.isFinite(value)) levels.push({ key, label, price: round(value), source,
@@ -204,7 +226,7 @@ export function buildFlow(st: BarStore, now: number, opts: {
   ] : ["No hay suficientes velas con tick volume para calcular el perfil sin inventar datos."];
   const validBars = profile?.bars || 0;
   return {
-    ok: !!profile, mode, scope, title, profile, levels, gaps, price,
+    ok: !!profile, mode, scope, title, profile, levels, gaps, sweeps, price,
     vwap: profile?.vwap ?? null, direction, evidence,
     quality: { validBars, withVolume: Math.round(validBars * (profile?.coverage || 0)),
       coveragePct: Math.round((profile?.coverage || 0)*100), cutoff,
@@ -213,7 +235,7 @@ export function buildFlow(st: BarStore, now: number, opts: {
 }
 
 function empty(mode: FlowMode, scope: FlowScope, cutoff: number, why: string, price: number|null): FlowResponse {
-  return { ok:false, mode, scope, title: why, profile: null, levels: [], gaps: [], price, vwap:null,
+  return { ok:false, mode, scope, title: why, profile: null, levels: [], gaps: [], sweeps: [], price, vwap:null,
     direction:"unknown", evidence:[why], quality:{validBars:0,withVolume:0,coveragePct:0,cutoff,
       disclaimer:"Sin datos suficientes. No se inventa volumen."} };
 }
