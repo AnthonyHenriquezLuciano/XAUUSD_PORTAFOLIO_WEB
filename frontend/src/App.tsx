@@ -6,6 +6,7 @@ import { Icon } from "./icons";
 import Journal from "./panels/Journal";
 import Settings from "./panels/Settings";
 import Signals from "./panels/Signals";
+import FlowStudio from "./panels/FlowStudio";
 import RealSessions from "./panels/RealSessions";
 import Stats from "./panels/Stats";
 import Strategies from "./panels/Strategies";
@@ -21,6 +22,7 @@ const NAV: [string, string, string][] = [
   ["centro", "Centro", "home"],
   ["operar", "Operar", "trade"],
   ["mercado", "Mercado", "market"],
+  ["flujo", "Flujo", "flow"],
   ["sesiones", "Sesiones", "clock"],
   ["diario", "Diario", "journal"],
   ["stats", "Estadísticas", "stats"],
@@ -28,7 +30,7 @@ const NAV: [string, string, string][] = [
   ["lab", "Lab", "lab"],
   ["ajustes", "Ajustes", "settings"],
 ];
-const CHART_VIEWS = new Set(["operar", "mercado"]);
+const CHART_VIEWS = new Set(["operar", "mercado", "flujo"]);
 
 export default function App({ signedIn, onExitSim }: { signedIn: boolean; onExitSim?: () => void }) {
   const { s, toasts } = useApp();
@@ -52,8 +54,8 @@ export default function App({ signedIn, onExitSim }: { signedIn: boolean; onExit
       {withChart ? (
         <main className="work">
           <Chart />
-          <aside className="side" aria-label={view === "operar" ? "Operar" : "Mercado"}>
-            {view === "operar" ? <Trade /> : <Signals />}
+          <aside className="side" aria-label={view === "operar" ? "Operar" : view === "flujo" ? "Flujo" : "Mercado"}>
+            {view === "operar" ? <Trade /> : view === "flujo" ? <FlowStudio /> : <Signals />}
           </aside>
         </main>
       ) : (
