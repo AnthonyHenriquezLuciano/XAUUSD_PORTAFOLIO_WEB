@@ -9,10 +9,12 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@fontsource/ibm-plex-mono": "^5.1.1",
+    "@fontsource/ibm-plex-sans": "^5.1.1",
+    "@supabase/supabase-js": "2.117.3",
     "lightweight-charts": "4.2.3",
     "react": "18.3.1",
-    "react-dom": "18.3.1",
-    "@supabase/supabase-js": "2.117.3"
+    "react-dom": "18.3.1"
   },
   "devDependencies": {
     "@types/react": "18.3.12",

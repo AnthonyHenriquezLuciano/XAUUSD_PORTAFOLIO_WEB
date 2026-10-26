@@ -16,9 +16,9 @@ const base = {
 };
 
 export const THEMES: ChartTheme[] = [
-  { id: "grafito", name: "Grafito", ...base, bg: "#0d1016", grid: "#161c27", text: "#8a93a6", border: "#262e3f", crosshair: "#5f687c",
-    up: "#22b07d", down: "#e5534b", wickUp: "#22b07d", wickDown: "#e5534b", level: { pd: "#b4bed2", open: "#8a93a6", r50: "#e0b04f" },
-    entry: "#9aa4b8", sl: "#e5534b", tp: "#22b07d", win: "#22b07d", loss: "#e5534b", tagBg: "rgba(13,16,22,.88)", tagText: "#e6e9ef" },
+  { id: "grafito", name: "Grafito", ...base, bg: "#0e141d", grid: "#171f2b", text: "#8d98aa", border: "#222c3a", crosshair: "#5e697b",
+    up: "#16b07a", down: "#e5484d", wickUp: "#16b07a", wickDown: "#e5484d", level: { pd: "#b4bed2", open: "#8d98aa", r50: "#d8a23c" },
+    entry: "#9aa4b8", sl: "#e5484d", tp: "#16b07a", win: "#16b07a", loss: "#e5484d", forecast: "#d8a23c", tagBg: "rgba(14,20,29,.9)", tagText: "#e8ecf2" },
   { id: "tv", name: "Clásico oscuro", ...base, bg: "#131722", grid: "#1e222d", text: "#b2b5be", border: "#2a2e39", crosshair: "#758696",
     up: "#089981", down: "#f23645", wickUp: "#089981", wickDown: "#f23645", level: { pd: "#d1d4dc", open: "#9598a1", r50: "#f7c548" },
     entry: "#b2b5be", sl: "#f23645", tp: "#089981", win: "#089981", loss: "#f23645", tagBg: "rgba(19,23,34,.9)", tagText: "#d1d4dc" },

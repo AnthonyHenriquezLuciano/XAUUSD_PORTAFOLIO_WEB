@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { useApp } from "../store";
-import { Card, Num, Seg, Toggle } from "../ui";
+import { Card, Field, Num, Seg, Tip, Toggle } from "../ui";
 
 type Acc = { id: string; name: string; login: number | null; server: string | null };
 type Link = { id: number; master_id: string; follower_id: string; enabled: boolean; lot_mode: string; lot_value: number; max_lots: number;
@@ -9,7 +9,7 @@ type Link = { id: number; master_id: string; follower_id: string; enabled: boole
 type MapRow = { id: number; link_id: number; master_ticket: number; follower_ticket: number | null; status: string; msg: string | null; created_at: string; master_id: string; follower_id: string };
 
 const MODES: [string, string][] = [["balance", "Según balance"], ["mult", "Multiplicador"], ["fixed", "Lote fijo"], ["risk", "Riesgo %"]];
-const VALUE_LABEL: Record<string, string> = { balance: "Ajuste (× proporción)", mult: "Multiplicador del lote", fixed: "Lotes por operación", risk: "Riesgo por operación (%)" };
+const VALUE_LABEL: Record<string, string> = { balance: "Ajuste (× proporción)", mult: "Multiplicador", fixed: "Lotes", risk: "Riesgo por operación (%)" };
 const MODE_HINT: Record<string, string> = {
   balance: "Lote copiado × (balance de esta cuenta ÷ balance de la copiada). Con 1 se arriesga el mismo % que en la otra cuenta.",
   mult: "Lote copiado × el multiplicador, sin mirar el balance.",
@@ -73,77 +73,74 @@ export default function CopyCard() {
   const dupWarn = form && form.copy_portfolio && !!s.settings?.autotrade;
 
   return (
-    <Card title="Copiador entre cuentas" right={can && !form ? <button className="btn sm" onClick={() => setForm({ ...NEW })}>Copiar otra cuenta</button> : null}>
-      <div className="hint" style={{ marginBottom: 6 }}>Esta cuenta repite las operaciones de otra cuenta tuya (o compartida contigo): aperturas, cambios de SL/TP, cierres parciales y cierres. Las órdenes las ejecuta el EA de esta cuenta, con sus propias guardas de fondeo, filtro de noticias y regla de no cobertura.</div>
-
-      {mine.length ? mine.map((l) => (
-        <div key={l.id} className="copy-row">
-          <div className="grow">
-            <div><b>Copia de {accName(byId(l.master_id))}</b>{!l.enabled ? <span className="muted"> · en pausa</span> : null}</div>
-            <div className="small muted">Lote {modeText(l)} · máx. {l.max_lots} · copia {what(l)}</div>
+    <div className="cols-2">
+      <Card title="Copiador entre cuentas" tip="Esta cuenta repite las operaciones de otra cuenta tuya (o compartida contigo): aperturas, cambios de SL/TP, parciales y cierres. Las ejecuta el EA de esta cuenta con sus propias guardas, filtro de noticias y regla de no cobertura. Necesita los dos EA conectados (v6.20 en esta). Las copias nunca se vuelven a copiar."
+        right={can && !form ? <button className="btn sm primary" onClick={() => setForm({ ...NEW })}>Copiar otra cuenta</button> : null}>
+        {mine.length ? mine.map((l) => (
+          <div key={l.id} className="copy-row">
+            <div className="grow">
+              <div><b>Copia de {accName(byId(l.master_id))}</b>{!l.enabled ? <span className="tag">en pausa</span> : null}</div>
+              <div className="muted">Lote {modeText(l)} · máx. {l.max_lots} · {what(l)}</div>
+            </div>
+            {can ? <>
+              <Toggle on={l.enabled} onChange={(v) => toggle(l, v)} title={l.enabled ? "Pausar" : "Reanudar"} />
+              <button className="btn xs" onClick={() => setForm({ ...l })}>Editar</button>
+              <button className="btn xs danger" onClick={() => remove(l)} aria-label="Quitar copiador">✕</button>
+            </> : null}
           </div>
-          {can ? <>
-            <Toggle on={l.enabled} onChange={(v) => toggle(l, v)} title={l.enabled ? "Pausar" : "Reanudar"} />
-            <button className="btn sm ghost" onClick={() => setForm({ ...l })}>Editar</button>
-            <button className="btn sm ghost" onClick={() => remove(l)} aria-label="Quitar copiador">✕</button>
-          </> : null}
-        </div>
-      )) : !form ? <div className="small muted">Esta cuenta no copia ninguna otra.</div> : null}
+        )) : !form ? <div className="empty-s">Esta cuenta no copia ninguna otra.</div> : null}
 
-      {form ? (
-        <div className="mg-block">
-          <label className="field"><span className="flabel">Cuenta que se copia</span>
-            <select value={form.master_id} disabled={!!form.id} onChange={(e) => setForm({ ...form, master_id: e.target.value })}>
-              <option value="">— elige —</option>
-              {choices.map((a) => <option key={a.id} value={a.id}>{accName(a)}</option>)}
-            </select>
-          </label>
-          {!choices.length && !form.id ? <div className="hint">No tienes otra cuenta: créala en Cuentas (cada cuenta necesita su propio MT5 con el EA puente).</div> : null}
-          <div style={{ margin: "8px 0 4px" }}><Seg value={form.lot_mode} options={MODES as any} onChange={(v) => setForm({ ...form, lot_mode: v, lot_value: v === "fixed" ? 0.1 : v === "risk" ? 0.3 : 1 })} /></div>
-          <div className="hint">{MODE_HINT[form.lot_mode]}</div>
-          <div className="grid2" style={{ marginTop: 6 }}>
-            <label className="field"><span className="flabel">{VALUE_LABEL[form.lot_mode]}</span><Num value={form.lot_value} step={form.lot_mode === "fixed" ? 0.01 : 0.1} min={0.01} max={form.lot_mode === "risk" ? 3 : 100} onChange={(v) => setForm({ ...form, lot_value: v })} /></label>
-            <label className="field"><span className="flabel">Lote máximo por copia</span><Num value={form.max_lots} step={0.1} min={0.01} max={100} onChange={(v) => setForm({ ...form, max_lots: v })} /></label>
+        {form ? (
+          <div className="mg-block stack">
+            <Field label="Cuenta que se copia">
+              <select value={form.master_id} disabled={!!form.id} onChange={(e) => setForm({ ...form, master_id: e.target.value })}>
+                <option value="">Elige una cuenta</option>
+                {choices.map((a) => <option key={a.id} value={a.id}>{accName(a)}</option>)}
+              </select>
+            </Field>
+            {!choices.length && !form.id ? <div className="note warn">No tienes otra cuenta. Créala en Cuentas (cada una necesita su propio MT5 con el EA).</div> : null}
+            <div className="field"><span className="field-l">Tamaño del lote<Tip text={MODE_HINT[form.lot_mode]} size={13} /></span><Seg full value={form.lot_mode} options={MODES as any} onChange={(v) => setForm({ ...form, lot_mode: v, lot_value: v === "fixed" ? 0.1 : v === "risk" ? 0.3 : 1 })} /></div>
+            <div className="grid2">
+              <Field label={VALUE_LABEL[form.lot_mode]}><Num value={form.lot_value} step={form.lot_mode === "fixed" ? 0.01 : 0.1} min={0.01} max={form.lot_mode === "risk" ? 3 : 100} onChange={(v) => setForm({ ...form, lot_value: v })} /></Field>
+              <Field label="Lote máximo"><Num value={form.max_lots} step={0.1} min={0.01} max={100} onChange={(v) => setForm({ ...form, max_lots: v })} /></Field>
+            </div>
+            <div className="checks">
+              <label><input type="checkbox" checked={form.copy_portfolio} onChange={(e) => setForm({ ...form, copy_portfolio: e.target.checked })} />Portafolio</label>
+              <label><input type="checkbox" checked={form.copy_manual} onChange={(e) => setForm({ ...form, copy_manual: e.target.checked })} />Manuales</label>
+              <label><input type="checkbox" checked={form.copy_other} onChange={(e) => setForm({ ...form, copy_other: e.target.checked })} />Otros EA</label>
+            </div>
+            <Field label="Retraso máximo" tip="Si el EA de esta cuenta estaba desconectado al abrirse la operación, solo se copia si no ha pasado este tiempo."><Num value={form.max_delay_s} step={10} min={10} max={3600} onChange={(v) => setForm({ ...form, max_delay_s: Math.round(v) })} suffix="s" /></Field>
+            {dupWarn ? <div className="note warn">Esta cuenta tiene el portafolio automático en ON: el portafolio se abriría dos veces. Desmarca «Portafolio» o apaga el automático aquí.</div> : null}
+            <div className="card-save">
+              <button className="btn sm ghost" onClick={() => setForm(null)}>Cancelar</button>
+              <button className="btn sm primary" disabled={busy} onClick={save}>{form.id ? "Guardar cambios" : "Empezar a copiar"}</button>
+            </div>
           </div>
-          <div className="row wrap small" style={{ gap: 14, margin: "8px 0" }}>
-            <label className="row" style={{ gap: 5 }}><input type="checkbox" checked={form.copy_portfolio} onChange={(e) => setForm({ ...form, copy_portfolio: e.target.checked })} />Portafolio</label>
-            <label className="row" style={{ gap: 5 }}><input type="checkbox" checked={form.copy_manual} onChange={(e) => setForm({ ...form, copy_manual: e.target.checked })} />Manuales</label>
-            <label className="row" style={{ gap: 5 }}><input type="checkbox" checked={form.copy_other} onChange={(e) => setForm({ ...form, copy_other: e.target.checked })} />Otros EA</label>
-          </div>
-          <label className="field"><span className="flabel">No copiar si han pasado más de (segundos)</span><Num value={form.max_delay_s} step={10} min={10} max={3600} onChange={(v) => setForm({ ...form, max_delay_s: Math.round(v) })} /></label>
-          <div className="hint">Si el EA de esta cuenta estaba desconectado cuando se abrió la operación, solo se copia si no ha pasado este tiempo (el precio ya se habrá movido).</div>
-          {dupWarn ? <div className="warnbox small" style={{ marginTop: 6 }}>Esta cuenta también tiene el portafolio automático en ON: las operaciones del portafolio se abrirían dos veces. Desmarca «Portafolio» o pon el automático en OFF en esta cuenta.</div> : null}
-          <div className="row" style={{ justifyContent: "flex-end", marginTop: 8 }}>
-            <button className="btn sm ghost" onClick={() => setForm(null)}>Cancelar</button>
-            <button className="btn sm primary" disabled={busy} onClick={save}>{form.id ? "Guardar cambios" : "Empezar a copiar"}</button>
-          </div>
-        </div>
-      ) : null}
+        ) : null}
 
-      {copiers.length ? (
-        <div style={{ marginTop: 10 }}>
-          <div className="small"><b>Cuentas que copian esta</b></div>
-          {copiers.map((l) => <div key={l.id} className="small muted">{accName(byId(l.follower_id))} · lote {modeText(l)}{!l.enabled ? " · en pausa" : ""}</div>)}
-        </div>
-      ) : null}
+        {copiers.length ? (
+          <div className="mg-block">
+            <div className="field-l">Cuentas que copian esta</div>
+            {copiers.map((l) => <div key={l.id} className="line"><span>{accName(byId(l.follower_id))}</span><span className="muted">lote {modeText(l)}{!l.enabled ? " · en pausa" : ""}</span></div>)}
+          </div>
+        ) : null}
+      </Card>
 
-      {rows.length ? (
-        <div style={{ marginTop: 10, overflowX: "auto" }}>
-          <div className="small" style={{ marginBottom: 4 }}><b>Últimas copias</b></div>
+      <Card title="Últimas copias">
+        {rows.length ? (
           <table className="t">
             <thead><tr><th>Hora</th><th>Original</th><th>Copia</th><th>Estado</th></tr></thead>
             <tbody>{rows.map((r) => (
               <tr key={r.id} title={r.msg || undefined}>
-                <td>{new Date(r.created_at).toLocaleString("es-ES", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</td>
-                <td className="mono">#{r.master_ticket}{r.follower_id === me ? "" : " (esta)"}</td>
-                <td className="mono">{r.follower_ticket ? `#${r.follower_ticket}` : "–"}</td>
+                <td className="muted">{new Date(r.created_at).toLocaleString("es-ES", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</td>
+                <td>#{r.master_ticket}{r.follower_id === me ? "" : " (esta)"}</td>
+                <td>{r.follower_ticket ? `#${r.follower_ticket}` : "–"}</td>
                 <td className={r.status === "fallida" ? "sell" : r.status === "abierta" ? "buy" : ""}>{ST[r.status] || r.status}{r.msg ? `: ${r.msg}` : ""}</td>
               </tr>
             ))}</tbody>
           </table>
-        </div>
-      ) : null}
-      <div className="hint" style={{ marginTop: 8 }}>Necesita los dos EA conectados y la v6.20 en esta cuenta (con versiones anteriores las copias se abren como manuales y el SL se calcula con el precio del servidor). Las copias nunca se vuelven a copiar, así que no se pueden crear bucles.</div>
-    </Card>
+        ) : <div className="empty-s">Todavía no hay copias.</div>}
+      </Card>
+    </div>
   );
 }

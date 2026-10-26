@@ -1,8 +1,11 @@
 import React, { useEffect, useRef, useState } from "react";
 import { api } from "../api";
+import { Icon } from "../icons";
 import { fmt, pct, useApp } from "../store";
 import { useUI } from "../uiState";
-import { Card, Field, Num, ProbBar, Seg } from "../ui";
+import { Card, Field, Num, ProbBar, Seg, Tip } from "../ui";
+
+const KIND_TXT = { market: "a mercado", limit: "límite", stop: "stop" };
 
 export default function Trade() {
   const { s, toast } = useApp();
@@ -20,12 +23,12 @@ export default function Trade() {
   const t = s.tick;
   const connected = s.status === "conectado";
   const canSend = connected && (s.broker === "sim" || ((s.role === "owner" || s.role === "trader") && !!s.ea?.online));
-  const why = !connected ? "" : s.broker === "cloud" && !(s.role === "owner" || s.role === "trader") ? "Tu acceso a esta cuenta es de solo lectura." : s.broker === "cloud" && !s.ea?.online ? "El EA no está conectado: abre MT5 con el EA puente para poder operar." : "";
-
+  const why = !connected ? "" : s.broker === "cloud" && !(s.role === "owner" || s.role === "trader") ? "Acceso de solo lectura." : s.broker === "cloud" && !s.ea?.online ? "EA desconectado: abre MT5 con el EA para operar." : "";
   const dpWhy: string | null = s.broker === "cloud" ? s.market?.discipline?.why || null : null;
 
   const start = (side: number) => {
     if (!t) return;
+    if (pv && pv.side === side) { ui.setPreview(null); return; }
     const entry = side > 0 ? t.ask : t.bid;
     const e = kind === "market" ? entry : kind === "limit" ? entry - side * atr * 0.1 : entry + side * atr * 0.1;
     const d = slAtr * atr;
@@ -68,98 +71,138 @@ export default function Trade() {
   const scaleRisk = s.broker === "sim" && sizing === "risk" && s.settings?.risk?.risk_pct ? riskPct / s.settings.risk.risk_pct : 1;
   const estLots = sizing === "lots" ? lots : pred ? Math.floor((pred.lots * scaleRisk) * 100) / 100 : null;
   const contract = s.settings?.contract_size || 100;
+  const set = (k: "entry" | "sl" | "tp") => (v: number) => ui.setPreview((p) => (p ? { ...p, [k]: v } : p));
 
   return (
-    <div className="col">
-      <div className="row">
-        <button className={`bigbtn sell ${pv && pv.side < 0 ? "" : pv ? "off" : ""}`} disabled={!t} onClick={() => start(-1)}>
-          <span>VENDER</span><span className="p">{t ? fmt(t.bid) : "–"}</span>
-        </button>
-        <button className={`bigbtn buy ${pv && pv.side > 0 ? "" : pv ? "off" : ""}`} disabled={!t} onClick={() => start(1)}>
-          <span>COMPRAR</span><span className="p">{t ? fmt(t.ask) : "–"}</span>
-        </button>
-      </div>
-      <div className="row between">
-        <Seg value={kind} options={[["market", "Mercado"], ["limit", "Límite"], ["stop", "Stop"]]} onChange={(k) => { setKind(k); if (pv) ui.setPreview(null); }} />
-        <span className="small muted">ATR diario {fmt(atr)}</span>
-      </div>
-      <div className="grid2">
-        <Field label="SL inicial (× ATR)"><Num value={slAtr} step={0.05} min={0.02} onChange={setSlAtr} /></Field>
-        <Field label="TP inicial (× riesgo, 0 = sin TP)"><Num value={tpR} step={0.5} min={0} onChange={setTpR} /></Field>
-      </div>
-      <div className="row between">
-        <Seg value={sizing} options={[["risk", "Por riesgo %"], ["lots", "Lotes fijos"]]} onChange={setSizing} />
-        {sizing === "risk" ? <div style={{ width: 110 }}><Num value={riskPct} step={0.05} min={0.01} onChange={setRiskPct} /></div> : <div style={{ width: 110 }}><Num value={lots} step={0.01} min={0.01} onChange={setLots} /></div>}
-      </div>
-
-      {pv ? (
-        <Card title={`Orden ${pv.side > 0 ? "de compra" : "de venta"} ${pv.kind === "market" ? "a mercado" : pv.kind === "limit" ? "límite" : "stop"}`} right={<button className="btn sm ghost" onClick={() => ui.setPreview(null)}>Cancelar</button>}>
-          <div className="grid3">
-            <Field label="Entrada"><Num value={pv.entry} disabled={pv.kind === "market"} onChange={(v) => ui.setPreview((p) => p ? { ...p, entry: v } : p)} /></Field>
-            <Field label="Stop loss"><Num value={pv.sl} onChange={(v) => ui.setPreview((p) => p ? { ...p, sl: v } : p)} /></Field>
-            <Field label="Take profit"><Num value={pv.tp} onChange={(v) => ui.setPreview((p) => p ? { ...p, tp: v } : p)} /></Field>
-          </div>
-          <div className="grid3 mono small" style={{ marginTop: 8 }}>
-            <div><div className="muted">Lotes</div>{estLots ?? "–"}</div>
-            <div><div className="muted">Riesgo</div><span className="sell">-{fmt((estLots ?? 0) * riskD * contract)}</span></div>
-            <div><div className="muted">Beneficio</div><span className="buy">{pv.tp ? `+${fmt((estLots ?? 0) * Math.abs(pv.tp - pv.entry) * contract)}` : "sin TP"}</span></div>
-          </div>
-          <div className="small muted" style={{ margin: "6px 0" }}>Relación {rr ? `1 : ${rr.toFixed(2)}` : "–"} · SL {fmt(riskD)} $/oz ({(riskD / atr).toFixed(2)} ATR)</div>
-          <div style={{ marginTop: 6 }}>
-            <div className="small" style={{ marginBottom: 4 }}><b>IA: qué suele pasar con una entrada así (próximas 4 h)</b></div>
-            <ProbBar probs={pred?.pred?.probs} />
-            {pred?.pred ? (
-              <div className="row small" style={{ marginTop: 6, gap: 14 }}>
-                <span>Termina en ganancia: <b className={pred.pred.p_ganancia >= 0.5 ? "buy" : "sell"}>{pct(pred.pred.p_ganancia)}</b></span>
-                <span>R esperado: <b className={pred.pred.exp_R >= 0 ? "buy" : "sell"}>{pred.pred.exp_R >= 0 ? "+" : ""}{pred.pred.exp_R.toFixed(2)}</b></span>
-              </div>
-            ) : null}
-            <div className="hint" style={{ marginTop: 4 }}>Probabilidades según volatilidad, hora y distancias de SL/TP (calibradas fuera de muestra). No predicen la dirección.</div>
-          </div>
-          {pred?.risk_note ? <div className="warnbox" style={{ marginTop: 8 }}>{pred.risk_note}</div> : null}
-          {s.risk?.blocked ? <div className="errbox" style={{ marginTop: 8 }}>Cuenta bloqueada: {s.risk.blocked}</div> : null}
-          {why ? <div className="warnbox small" style={{ marginTop: 8 }}>{why}</div> : null}
-          {dpWhy ? <div className="errbox small" style={{ marginTop: 8 }}>Protector de disciplina: {dpWhy}. El EA no abrirá esta operación{s.market.discipline.until ? ` hasta las ${new Date((s.market.discipline.until - (s.news_offset ?? 7200)) * 1000).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}` : ""}.</div> : null}
-          <button className={`btn primary`} style={{ width: "100%", marginTop: 10, background: pv.side > 0 ? "#22b07d" : "#e5534b", borderColor: "transparent", color: "#fff" }} disabled={busy || !canSend || !!dpWhy} onClick={send}>
-            {busy ? (s.broker === "cloud" ? "Enviando al EA…" : "Enviando…") : `Confirmar ${pv.side > 0 ? "COMPRA" : "VENTA"}`}
+    <div className="stack">
+      <section className="ticket">
+        <div className="sides">
+          <button className={`bigbtn sell ${pv && pv.side > 0 ? "off" : ""} ${pv && pv.side < 0 ? "sel" : ""}`} disabled={!t} onClick={() => start(-1)}>
+            <span>VENDER</span><span className="p">{t ? fmt(t.bid) : "–"}</span>
           </button>
-        </Card>
-      ) : (
-        <div className="hint">Pulsa COMPRAR o VENDER para preparar la orden: aparecerán las líneas de entrada, SL y TP en el gráfico para que las arrastres. Después confirmas.</div>
-      )}
+          <button className={`bigbtn buy ${pv && pv.side < 0 ? "off" : ""} ${pv && pv.side > 0 ? "sel" : ""}`} disabled={!t} onClick={() => start(1)}>
+            <span>COMPRAR</span><span className="p">{t ? fmt(t.ask) : "–"}</span>
+          </button>
+        </div>
+        <Seg full value={kind} options={[["market", "Mercado"], ["limit", "Límite"], ["stop", "Stop"]]} onChange={(k) => { setKind(k); if (pv) ui.setPreview(null); }} />
+        <div className="grid3">
+          <Field label="SL" tip={`Distancia del stop en múltiplos del ATR diario (${fmt(atr)}).`}><Num value={slAtr} step={0.05} min={0.02} onChange={setSlAtr} suffix="ATR" /></Field>
+          <Field label="TP" tip="Objetivo en múltiplos del riesgo. 0 = sin TP."><Num value={tpR} step={0.5} min={0} onChange={setTpR} suffix="R" /></Field>
+          <div className="field">
+            <span className="field-l"><button type="button" className="linkbtn" onClick={() => setSizing(sizing === "risk" ? "lots" : "risk")} title="Cambiar entre riesgo % y lotes fijos">{sizing === "risk" ? "Riesgo" : "Lotes"} <Icon name="chevron" size={12} /></button></span>
+            {sizing === "risk" ? <Num value={riskPct} step={0.05} min={0.01} onChange={setRiskPct} suffix="%" /> : <Num value={lots} step={0.01} min={0.01} onChange={setLots} suffix="lot" />}
+          </div>
+        </div>
 
-      <OpenPositionsMini />
+        {pv ? (
+          <div className={`order ${pv.side > 0 ? "is-buy" : "is-sell"}`}>
+            <div className="order-h">
+              <b>{pv.side > 0 ? "Compra" : "Venta"} {KIND_TXT[pv.kind]}</b>
+              <button className="iconbtn" onClick={() => ui.setPreview(null)} aria-label="Cancelar orden" title="Cancelar"><Icon name="close" size={16} /></button>
+            </div>
+            <div className="grid3">
+              <Field label="Entrada"><Num value={pv.entry} disabled={pv.kind === "market"} onChange={set("entry")} /></Field>
+              <Field label="Stop loss"><Num value={pv.sl} onChange={set("sl")} /></Field>
+              <Field label="Take profit"><Num value={pv.tp} onChange={set("tp")} /></Field>
+            </div>
+            <div className="order-nums">
+              <div><span>Lotes</span><b>{estLots ?? "–"}</b></div>
+              <div><span>Riesgo</span><b className="sell">−{fmt((estLots ?? 0) * riskD * contract)}</b></div>
+              <div><span>Beneficio</span><b className="buy">{pv.tp ? `+${fmt((estLots ?? 0) * Math.abs(pv.tp - pv.entry) * contract)}` : "—"}</b></div>
+              <div><span>R:R</span><b>{rr ? `1:${rr.toFixed(1)}` : "—"}</b></div>
+            </div>
+            <div className="order-ai">
+              <span className="field-l">Próximas 4 h<Tip text="Qué suele pasar con una entrada así según la volatilidad, la hora y las distancias de SL/TP (modelo calibrado fuera de muestra). No predice la dirección." size={13} /></span>
+              <ProbBar probs={pred?.pred?.probs} />
+              {pred?.pred ? <div className="order-ai-n"><span>Ganancia <b className={pred.pred.p_ganancia >= 0.5 ? "buy" : "sell"}>{pct(pred.pred.p_ganancia)}</b></span><span>R esperado <b className={pred.pred.exp_R >= 0 ? "buy" : "sell"}>{pred.pred.exp_R >= 0 ? "+" : ""}{pred.pred.exp_R.toFixed(2)}</b></span></div> : null}
+            </div>
+            {pred?.risk_note ? <div className="note warn">{pred.risk_note}</div> : null}
+            {s.risk?.blocked ? <div className="note bad">Cuenta bloqueada: {s.risk.blocked}</div> : null}
+            {why ? <div className="note warn">{why}</div> : null}
+            {dpWhy ? <div className="note bad">Protector de disciplina: {dpWhy}</div> : null}
+            <button className={`confirm ${pv.side > 0 ? "buy" : "sell"}`} disabled={busy || !canSend || !!dpWhy} onClick={send}>
+              {busy ? (s.broker === "cloud" ? "Enviando al EA…" : "Enviando…") : `Confirmar ${pv.side > 0 ? "COMPRA" : "VENTA"}`}
+            </button>
+          </div>
+        ) : <div className="ticket-hint">Elige compra o venta y ajusta SL y TP en el gráfico.</div>}
+      </section>
+
+      <Positions />
     </div>
   );
 }
 
 function round(v: number) { return Math.round(v * 100) / 100; }
 
-function OpenPositionsMini() {
-  const { s, toast } = useApp();
-  if (!s.positions.length) return null;
-  const close = async (ticket: number, volume?: number) => {
-    try { await api("/api/position/close", "POST", { ticket, volume }); toast("Cerrada", "ok"); } catch (e: any) { toast(e.message, "error"); }
-  };
-  const be = async (ticket: number) => {
-    try { await api("/api/position/breakeven", "POST", { ticket }); toast("SL a break-even", "ok"); } catch (e: any) { toast(e.message, "error"); }
-  };
+function PosRow({ p }: { p: any }) {
+  const { toast } = useApp();
+  const [edit, setEdit] = useState(false);
+  const [sl, setSl] = useState<number>(p.sl);
+  const [tp, setTp] = useState<number>(p.tp);
+  useEffect(() => { setSl(p.sl); setTp(p.tp); }, [p.sl, p.tp]);
+  const call = async (path: string, body: any, ok: string) => { try { await api(path, "POST", body); toast(ok, "ok"); } catch (e: any) { toast(e.message, "error"); } };
   return (
-    <Card title="Posiciones abiertas">
-      {s.positions.map((p) => (
-        <div key={p.ticket} className="row between" style={{ padding: "5px 0", borderBottom: "1px solid #1e2534" }}>
-          <div>
-            <div><b className={p.side > 0 ? "buy" : "sell"}>{p.side > 0 ? "Compra" : "Venta"}</b> {p.volume} <span className="muted small">{p.comment}</span></div>
-            <div className="small muted mono">@{fmt(p.price_open)} · SL {fmt(p.sl)} · TP {fmt(p.tp)}</div>
-          </div>
-          <div className="row">
-            <b className={`mono ${p.profit >= 0 ? "buy" : "sell"}`}>{p.profit >= 0 ? "+" : ""}{fmt(p.profit)}</b>
-            <button className="btn sm" onClick={() => be(p.ticket)} title="Mover SL a la entrada">BE</button>
-            <button className="btn sm" onClick={() => close(p.ticket, Math.max(0.01, Math.round(p.volume * 50) / 100))} title="Cerrar la mitad">½</button>
-            <button className="btn sm danger" onClick={() => close(p.ticket)}>✕</button>
-          </div>
+    <div className="pos">
+      <div className="pos-main">
+        <span className={`side-tag ${p.side > 0 ? "buy" : "sell"}`}>{p.side > 0 ? "Compra" : "Venta"}</span>
+        <div className="pos-info">
+          <div><b>{p.volume}</b> <span className="muted">@ {fmt(p.price_open)}</span></div>
+          <div className="pos-sub">SL {p.sl ? fmt(p.sl) : "—"} · TP {p.tp ? fmt(p.tp) : "—"}{p.comment ? <span className="dim"> · {p.comment}</span> : null}</div>
         </div>
-      ))}
-    </Card>
+        <b className={`pos-pnl ${p.profit >= 0 ? "buy" : "sell"}`}>{p.profit >= 0 ? "+" : ""}{fmt(p.profit)}</b>
+      </div>
+      <div className="pos-act">
+        <button className="btn xs" onClick={() => call("/api/position/breakeven", { ticket: p.ticket }, "SL a break-even")} title="Mover el SL a la entrada">BE</button>
+        <button className="btn xs" onClick={() => call("/api/position/close", { ticket: p.ticket, volume: Math.max(0.01, Math.round(p.volume * 50) / 100) }, "Cerrada la mitad")} title="Cerrar la mitad">½</button>
+        <button className={`btn xs ${edit ? "on" : ""}`} onClick={() => setEdit(!edit)} title="Editar SL y TP">SL/TP</button>
+        <div className="spacer" />
+        <button className="btn xs danger" onClick={() => call("/api/position/close", { ticket: p.ticket }, "Cerrada")} aria-label="Cerrar posición" title="Cerrar">✕</button>
+      </div>
+      {edit ? (
+        <div className="pos-edit">
+          <Field label="SL"><Num value={sl} onChange={setSl} /></Field>
+          <Field label="TP"><Num value={tp} onChange={setTp} /></Field>
+          <button className="btn sm primary" onClick={() => { call("/api/position/modify", { ticket: p.ticket, sl, tp }, "SL/TP actualizados"); setEdit(false); }}>Aplicar</button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function Positions() {
+  const { s, toast, ask } = useApp();
+  const closeAll = async () => {
+    if (!(await ask("¿Cerrar todas las posiciones de XAUUSD ahora?", "Cerrar todo", true))) return;
+    try { await api("/api/close_all", "POST"); toast("Posiciones cerradas", "ok"); } catch (e: any) { toast(e.message, "error"); }
+  };
+  const virt = s.strategies.filter((x) => x.levels);
+  return (
+    <>
+      <Card title={`Posiciones${s.positions.length ? ` (${s.positions.length})` : ""}`} tip="También puedes arrastrar las líneas de SL y TP en el gráfico."
+        right={s.positions.length > 1 ? <button className="btn xs danger mobile-only" onClick={closeAll}>Cerrar todo</button> : null}>
+        {s.positions.length === 0 ? <div className="empty-s">Sin posiciones abiertas.</div> : s.positions.map((p) => <PosRow key={p.ticket} p={p} />)}
+      </Card>
+      {s.orders.length ? (
+        <Card title="Órdenes pendientes">
+          {s.orders.map((o) => (
+            <div key={o.ticket} className="line">
+              <span>{o.kind.replace("_", " ")} <b>{o.volume}</b> @ {fmt(o.price)}</span>
+              <span className="dim">SL {fmt(o.sl)} · TP {fmt(o.tp)}</span>
+              <button className="btn xs danger" onClick={() => api("/api/order/cancel", "POST", { ticket: o.ticket }).then(() => toast("Orden cancelada", "ok")).catch((e) => toast(e.message, "error"))}>Cancelar</button>
+            </div>
+          ))}
+        </Card>
+      ) : null}
+      {virt.length ? (
+        <Card title="Órdenes del portafolio" tip="Órdenes virtuales: el EA solo envía la orden a MT5 cuando el precio llega al nivel.">
+          {virt.map((x) => (
+            <div key={x.name} className="line">
+              <b>{x.name}</b>
+              <span>{x.levels.buy ? <span className="buy">▲ {fmt(x.levels.buy)}</span> : null} {x.levels.sell ? <span className="sell">▼ {fmt(x.levels.sell)}</span> : null}</span>
+            </div>
+          ))}
+        </Card>
+      ) : null}
+    </>
   );
 }

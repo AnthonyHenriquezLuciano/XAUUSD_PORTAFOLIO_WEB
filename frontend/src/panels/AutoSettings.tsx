@@ -1,18 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../api";
 import { useApp } from "../store";
-import { Card, Num, Seg, Toggle } from "../ui";
+import { Card, Field, Num, Seg, SetRow, Toggle } from "../ui";
 
-function Row({ label, hint, children, pending }: { label: string; hint?: string; children: React.ReactNode; pending?: boolean }) {
-  return (
-    <div className="row between" style={{ padding: "5px 0" }}>
-      <div><div>{label}{pending ? <span className="pending"> · pendiente</span> : null}</div>{hint ? <div className="hint">{hint}</div> : null}</div>
-      <div style={{ width: 120, flex: "none", display: "flex", justifyContent: "flex-end" }}>{children}</div>
-    </div>
-  );
-}
-
-/** Ajustes que ejecuta el EA: filtro de noticias y gestión automática de posiciones. */
+/** Ajustes que ejecuta el EA: protector de disciplina, filtro de noticias y gestión automática. */
 export function useExtra() {
   const { s, toast } = useApp();
   const base = s.settings?.extra || {};
@@ -22,16 +13,18 @@ export function useExtra() {
   const save = async () => {
     try {
       await api("/api/settings", "PUT", { extra: x });
-      toast(s.ea?.online ? "Enviado al EA" : "Guardado: el EA lo aplicará al conectarse", "ok");
+      toast(s.ea?.online ? "Enviado al EA" : "Guardado: se aplicará al conectar el EA", "ok");
     } catch (e: any) { toast(e.message, "error"); }
   };
   return { x, set: (k: string, v: any) => setX({ ...x, [k]: v }), dirty, save, reset: () => setX(base) };
 }
 
-function SaveBar({ dirty, save, reset }: { dirty: boolean; save: () => void; reset: () => void }) {
+function CardSave({ dirty, save, reset }: { dirty: boolean; save: () => void; reset: () => void }) {
   if (!dirty) return null;
-  return <div className="row" style={{ justifyContent: "flex-end", marginTop: 8 }}><button className="btn sm ghost" onClick={reset}>Descartar</button><button className="btn sm primary" onClick={save}>Guardar</button></div>;
+  return <div className="card-save"><button className="btn sm ghost" onClick={reset}>Descartar</button><button className="btn sm primary" onClick={save}>Guardar</button></div>;
 }
+const OldEa = ({ v }: { v: string }) => <div className="note warn">Tu EA es la v{v}: instala la v6.20 para usar esto.</div>;
+const hm = (t: number) => new Date(t * 1000).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
 
 export function NewsFilterCard() {
   const { s } = useApp();
@@ -40,16 +33,17 @@ export function NewsFilterCard() {
   const can = s.role === "owner" || s.role === "trader";
   const old = s.settings && !s.settings.ea_supports_extra && s.ea?.version;
   return (
-    <Card title="Filtro de noticias" right={<Toggle on={!!x.news_enabled} onChange={(v) => can && set("news_enabled", v)} />}>
-      {old ? <div className="warnbox small" style={{ marginBottom: 8 }}>Tu EA es la versión {s.ea.version}: instala la v6.20 (Cuentas → Conectar EA) para que aplique el filtro.</div> : null}
-      <div className="hint" style={{ marginBottom: 6 }}>Usa el calendario económico (USD) que el servidor descarga cada hora. El EA no abre operaciones —ni del portafolio ni manuales desde la web— dentro de la ventana de cada noticia.</div>
-      <Row label="Impacto" pending={pend.includes("news_impact")}><Seg value={x.news_impact || "high"} options={[["high", "Alto"], ["medium", "Alto y medio"]]} onChange={(v) => can && set("news_impact", v)} /></Row>
-      <Row label="Minutos antes" hint="FundingPips: 5 en cuentas fondeadas" pending={pend.includes("news_before")}><Num value={x.news_before} step={1} min={0} max={120} disabled={!can} onChange={(v) => set("news_before", Math.round(v))} /></Row>
-      <Row label="Minutos después" pending={pend.includes("news_after")}><Num value={x.news_after} step={1} min={0} max={120} disabled={!can} onChange={(v) => set("news_after", Math.round(v))} /></Row>
-      <Row label="Cerrar posiciones antes de la noticia" hint="Solo las abiertas hace menos de 5 h (las más antiguas están exentas en FundingPips)" pending={pend.includes("news_close")}><Toggle on={!!x.news_close} onChange={(v) => can && set("news_close", v)} /></Row>
-      {x.news_close ? <Row label="… minutos antes" pending={pend.includes("news_close_min")}><Num value={x.news_close_min} step={1} min={1} max={120} disabled={!can} onChange={(v) => set("news_close_min", Math.round(v))} /></Row> : null}
-      <SaveBar dirty={dirty} save={save} reset={reset} />
-      <div className="hint" style={{ marginTop: 6 }}>En evaluación FundingPips no restringe las noticias; en la cuenta fondeada (Master) los beneficios de operaciones abiertas o cerradas 5 min antes o después de una noticia restringida no cuentan. Comprueba el calendario de tu panel de FundingPips.</div>
+    <Card title="Filtro de noticias" tip="Con el calendario USD que el servidor descarga cada hora. El EA no abre operaciones dentro de la ventana de cada noticia. FundingPips solo lo exige en cuentas fondeadas (5 min antes y después)."
+      right={<Toggle on={!!x.news_enabled} onChange={(v) => can && set("news_enabled", v)} label="Filtro de noticias" />}>
+      {old ? <OldEa v={s.ea.version} /> : null}
+      <SetRow label="Impacto" pending={pend.includes("news_impact")}><Seg value={x.news_impact || "high"} options={[["high", "Alto"], ["medium", "Alto y medio"]]} onChange={(v) => can && set("news_impact", v)} /></SetRow>
+      <div className="grid2">
+        <Field label="Minutos antes"><Num value={x.news_before} step={1} min={0} max={120} disabled={!can} onChange={(v) => set("news_before", Math.round(v))} /></Field>
+        <Field label="Minutos después"><Num value={x.news_after} step={1} min={0} max={120} disabled={!can} onChange={(v) => set("news_after", Math.round(v))} /></Field>
+      </div>
+      <SetRow label="Cerrar antes de la noticia" tip="Solo posiciones abiertas hace menos de 5 h (las más antiguas están exentas en FundingPips)." pending={pend.includes("news_close")}><Toggle on={!!x.news_close} onChange={(v) => can && set("news_close", v)} label="Cerrar antes de la noticia" /></SetRow>
+      {x.news_close ? <SetRow label="Minutos antes del cierre"><Num value={x.news_close_min} step={1} min={1} max={120} disabled={!can} onChange={(v) => set("news_close_min", Math.round(v))} /></SetRow> : null}
+      <CardSave dirty={dirty} save={save} reset={reset} />
     </Card>
   );
 }
@@ -61,36 +55,31 @@ export function ManagementCard() {
   const can = s.role === "owner" || s.role === "trader";
   const old = s.settings && !s.settings.ea_supports_extra && s.ea?.version;
   return (
-    <Card title="Gestión automática de posiciones">
-      {old ? <div className="warnbox small" style={{ marginBottom: 8 }}>Tu EA es la versión {s.ea.version}: instala la v6.20 (Cuentas → Conectar EA) para que aplique la gestión.</div> : null}
-      <Row label="Posiciones que gestiona" pending={pend.includes("mg_scope")}><select value={x.mg_scope || "todas"} disabled={!can} onChange={(e) => set("mg_scope", e.target.value)}><option value="todas">Portafolio y manuales</option><option value="portafolio">Solo portafolio</option><option value="manuales">Solo manuales</option></select></Row>
-      <div className="hint" style={{ marginBottom: 4 }}>Nunca toca operaciones de otros EA. R = distancia del SL inicial.</div>
-
+    <Card title="Gestión automática de posiciones" tip="R = distancia del SL inicial. Nunca toca operaciones de otros EA ni las copias. El portafolio se validó sin gestión: compáralo antes en el backtest.">
+      {old ? <OldEa v={s.ea.version} /> : null}
+      <SetRow label="Gestiona" pending={pend.includes("mg_scope")}><select value={x.mg_scope || "todas"} disabled={!can} onChange={(e) => set("mg_scope", e.target.value)} aria-label="Posiciones que gestiona"><option value="todas">Portafolio y manuales</option><option value="portafolio">Solo portafolio</option><option value="manuales">Solo manuales</option></select></SetRow>
       <div className="mg-block">
-        <Row label="Break-even" hint="Mueve el SL a la entrada (+ un margen para cubrir costes)" pending={pend.includes("be_enabled")}><Toggle on={!!x.be_enabled} onChange={(v) => can && set("be_enabled", v)} /></Row>
+        <SetRow label="Break-even" tip="Mueve el SL a la entrada más un margen." pending={pend.includes("be_enabled")}><Toggle on={!!x.be_enabled} onChange={(v) => can && set("be_enabled", v)} label="Break-even" /></SetRow>
         {x.be_enabled ? <div className="grid2">
-          <label className="field"><span className="flabel">Al llegar a (R)</span><Num value={x.be_r} step={0.1} min={0.2} max={10} disabled={!can} onChange={(v) => set("be_r", v)} /></label>
-          <label className="field"><span className="flabel">Margen sobre la entrada ($/oz)</span><Num value={x.be_offset} step={0.05} min={0} max={20} disabled={!can} onChange={(v) => set("be_offset", v)} /></label>
+          <Field label="Al llegar a"><Num value={x.be_r} step={0.1} min={0.2} max={10} disabled={!can} onChange={(v) => set("be_r", v)} suffix="R" /></Field>
+          <Field label="Margen"><Num value={x.be_offset} step={0.05} min={0} max={20} disabled={!can} onChange={(v) => set("be_offset", v)} suffix="$" /></Field>
         </div> : null}
       </div>
-
       <div className="mg-block">
-        <Row label="Trailing stop" hint="El SL sigue al precio y solo se mueve a favor" pending={pend.includes("tr_enabled")}><Toggle on={!!x.tr_enabled} onChange={(v) => can && set("tr_enabled", v)} /></Row>
+        <SetRow label="Trailing stop" tip="El SL sigue al precio y solo se mueve a favor." pending={pend.includes("tr_enabled")}><Toggle on={!!x.tr_enabled} onChange={(v) => can && set("tr_enabled", v)} label="Trailing stop" /></SetRow>
         {x.tr_enabled ? <div className="grid2">
-          <label className="field"><span className="flabel">Empieza a (R)</span><Num value={x.tr_start_r} step={0.1} min={0.2} max={20} disabled={!can} onChange={(v) => set("tr_start_r", v)} /></label>
-          <label className="field"><span className="flabel">Distancia al precio (R)</span><Num value={x.tr_dist_r} step={0.1} min={0.1} max={10} disabled={!can} onChange={(v) => set("tr_dist_r", v)} /></label>
+          <Field label="Empieza a"><Num value={x.tr_start_r} step={0.1} min={0.2} max={20} disabled={!can} onChange={(v) => set("tr_start_r", v)} suffix="R" /></Field>
+          <Field label="Distancia"><Num value={x.tr_dist_r} step={0.1} min={0.1} max={10} disabled={!can} onChange={(v) => set("tr_dist_r", v)} suffix="R" /></Field>
         </div> : null}
       </div>
-
       <div className="mg-block">
-        <Row label="Cierre parcial" hint="Una vez por posición" pending={pend.includes("pt_enabled")}><Toggle on={!!x.pt_enabled} onChange={(v) => can && set("pt_enabled", v)} /></Row>
+        <SetRow label="Cierre parcial" tip="Una vez por posición." pending={pend.includes("pt_enabled")}><Toggle on={!!x.pt_enabled} onChange={(v) => can && set("pt_enabled", v)} label="Cierre parcial" /></SetRow>
         {x.pt_enabled ? <div className="grid2">
-          <label className="field"><span className="flabel">Al llegar a (R)</span><Num value={x.pt_r} step={0.1} min={0.2} max={20} disabled={!can} onChange={(v) => set("pt_r", v)} /></label>
-          <label className="field"><span className="flabel">Porcentaje a cerrar (%)</span><Num value={x.pt_pct} step={5} min={5} max={95} disabled={!can} onChange={(v) => set("pt_pct", Math.round(v))} /></label>
+          <Field label="Al llegar a"><Num value={x.pt_r} step={0.1} min={0.2} max={20} disabled={!can} onChange={(v) => set("pt_r", v)} suffix="R" /></Field>
+          <Field label="Cerrar"><Num value={x.pt_pct} step={5} min={5} max={95} disabled={!can} onChange={(v) => set("pt_pct", Math.round(v))} suffix="%" /></Field>
         </div> : null}
       </div>
-      <SaveBar dirty={dirty} save={save} reset={reset} />
-      <div className="warnbox small" style={{ marginTop: 8 }}>El portafolio se validó sin esta gestión. Antes de activarla, compara en Estrategias → Backtest con «Aplicar gestión automática»: puede mejorar o empeorar el resultado.</div>
+      <CardSave dirty={dirty} save={save} reset={reset} />
     </Card>
   );
 }
@@ -106,32 +95,29 @@ export function DisciplineCard() {
   const dp = s.market?.discipline;
   const winOk = WIN_RE.test(x.dp_windows || "");
   const off = (v: number) => (v > 0 ? "" : " · desactivado");
+  const off2 = s.news_offset ?? 7200;
   return (
-    <Card title="Protector de disciplina" right={<Toggle on={!!x.dp_enabled} onChange={(v) => can && set("dp_enabled", v)} />}>
-      {old ? <div className="warnbox small" style={{ marginBottom: 8 }}>Tu EA es la versión {s.ea.version}: instala la v6.20 (Cuentas → Conectar EA) para que aplique el protector.</div> : null}
-      <div className="hint" style={{ marginBottom: 6 }}>Reglas que el EA aplica solo, aunque la web esté cerrada. Cuando se cumple una, no se abren más operaciones hasta que termine el bloqueo (las abiertas siguen con su SL y TP).</div>
+    <Card title="Protector de disciplina" tip="El EA deja de abrir operaciones cuando se cumple una regla, aunque la web esté cerrada. Las abiertas siguen con su SL y TP. Los límites del día cuentan desde la medianoche del servidor."
+      right={<Toggle on={!!x.dp_enabled} onChange={(v) => can && set("dp_enabled", v)} label="Protector de disciplina" />}>
+      {old ? <OldEa v={s.ea.version} /> : null}
       {x.dp_enabled && dp ? (
-        <div className={dp.why ? "errbox small" : "okbox small"} style={{ marginBottom: 8 }}>
-          {dp.why ? <>Bloqueado: <b>{dp.why}</b>{dp.until ? ` · hasta las ${new Date((dp.until - (s.news_offset ?? 7200)) * 1000).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}` : ""}</> : "Sin bloqueo."}
-          {dp.why ? " · " : " "}Hoy: {dp.losses} pérdidas seguidas · {dp.trades} operaciones.
+        <div className={`note ${dp.why ? "bad" : "ok"}`}>
+          {dp.why ? <>Bloqueado: <b>{dp.why}</b>{dp.until ? ` · hasta las ${hm(dp.until - off2)}` : ""} · </> : "Sin bloqueo · "}
+          hoy {dp.losses} pérdidas seguidas, {dp.trades} operaciones
         </div>
       ) : null}
-      <Row label="Se aplica a" pending={pend.includes("dp_scope")}><Seg value={x.dp_scope || "manuales"} options={[["manuales", "Manuales"], ["todas", "Todas"]]} onChange={(v) => can && set("dp_scope", v)} /></Row>
-      <div className="hint" style={{ marginBottom: 4 }}>«Manuales»: las de la web y las que abras a mano en MT5. «Todas»: también el portafolio y las copias de otra cuenta.</div>
-      <div className="mg-block">
-        <div className="grid2">
-          <label className="field"><span className="flabel">Pérdidas seguidas para parar el día{off(x.dp_max_losses)}</span><Num value={x.dp_max_losses} step={1} min={0} max={20} disabled={!can} onChange={(v) => set("dp_max_losses", Math.round(v))} /></label>
-          <label className="field"><span className="flabel">Máximo de operaciones al día{off(x.dp_max_trades)}</span><Num value={x.dp_max_trades} step={1} min={0} max={50} disabled={!can} onChange={(v) => set("dp_max_trades", Math.round(v))} /></label>
-          <label className="field"><span className="flabel">Parar al ganar en el día (%){off(x.dp_profit_pct)}</span><Num value={x.dp_profit_pct} step={0.1} min={0} max={20} disabled={!can} onChange={(v) => set("dp_profit_pct", v)} /></label>
-          <label className="field"><span className="flabel">Parar al perder en el día (%){off(x.dp_loss_pct)}</span><Num value={x.dp_loss_pct} step={0.1} min={0} max={10} disabled={!can} onChange={(v) => set("dp_loss_pct", v)} /></label>
-          <label className="field"><span className="flabel">Pausa tras una pérdida (min){off(x.dp_cooldown_min)}</span><Num value={x.dp_cooldown_min} step={5} min={0} max={600} disabled={!can} onChange={(v) => set("dp_cooldown_min", Math.round(v))} /></label>
-          <label className="field"><span className="flabel">Horas sin operar (hora del servidor)</span><input value={x.dp_windows || ""} placeholder="23:45-01:15" disabled={!can} onChange={(e) => set("dp_windows", e.target.value)} style={winOk ? undefined : { borderColor: "var(--sell)" }} /></label>
-        </div>
-        {!winOk ? <div className="hint sell">Formato: HH:MM-HH:MM, separa varias con comas (por ejemplo 23:45-01:15, 15:25-15:40).</div> : null}
-        <div className="hint">Los límites del día se cuentan desde la medianoche del servidor del bróker, igual que la pérdida diaria de FundingPips. «Parar al perder» sirve para un límite tuyo más estricto que la guarda de fondeo.</div>
+      <SetRow label="Se aplica a" tip="Manuales: las de la web y las que abras a mano en MT5. Todas: también el portafolio y las copias." pending={pend.includes("dp_scope")}><Seg value={x.dp_scope || "manuales"} options={[["manuales", "Manuales"], ["todas", "Todas"]]} onChange={(v) => can && set("dp_scope", v)} /></SetRow>
+      <div className="grid2">
+        <Field label={`Pérdidas seguidas para parar el día${off(x.dp_max_losses)}`}><Num value={x.dp_max_losses} step={1} min={0} max={20} disabled={!can} onChange={(v) => set("dp_max_losses", Math.round(v))} /></Field>
+        <Field label={`Máximo de operaciones al día${off(x.dp_max_trades)}`}><Num value={x.dp_max_trades} step={1} min={0} max={50} disabled={!can} onChange={(v) => set("dp_max_trades", Math.round(v))} /></Field>
+        <Field label={`Parar al ganar en el día${off(x.dp_profit_pct)}`}><Num value={x.dp_profit_pct} step={0.1} min={0} max={20} disabled={!can} onChange={(v) => set("dp_profit_pct", v)} suffix="%" /></Field>
+        <Field label={`Parar al perder en el día${off(x.dp_loss_pct)}`} tip="Un límite tuyo, más estricto que la guarda de fondeo."><Num value={x.dp_loss_pct} step={0.1} min={0} max={10} disabled={!can} onChange={(v) => set("dp_loss_pct", v)} suffix="%" /></Field>
+        <Field label={`Pausa tras una pérdida${off(x.dp_cooldown_min)}`}><Num value={x.dp_cooldown_min} step={5} min={0} max={600} disabled={!can} onChange={(v) => set("dp_cooldown_min", Math.round(v))} suffix="min" /></Field>
+        <Field label="Horas sin operar (hora del servidor)" tip="HH:MM-HH:MM, varias separadas por comas. Ej.: 23:45-01:15, 15:25-15:40"><input value={x.dp_windows || ""} placeholder="23:45-01:15" disabled={!can} onChange={(e) => set("dp_windows", e.target.value)} className={winOk ? "" : "invalid"} /></Field>
       </div>
-      <Row label="Cerrar lo que abras a mano en MT5 durante un bloqueo" hint="El EA no puede impedir una orden hecha en MT5, pero sí cerrarla al instante" pending={pend.includes("dp_close_mt5")}><Toggle on={!!x.dp_close_mt5} onChange={(v) => can && set("dp_close_mt5", v)} /></Row>
-      {winOk ? <SaveBar dirty={dirty} save={save} reset={reset} /> : null}
+      {!winOk ? <div className="note bad">Formato de horas: HH:MM-HH:MM, separadas por comas.</div> : null}
+      <SetRow label="Cerrar lo que abras en MT5 durante un bloqueo" tip="El EA no puede impedir una orden hecha en MT5, pero sí cerrarla al instante." pending={pend.includes("dp_close_mt5")}><Toggle on={!!x.dp_close_mt5} onChange={(v) => can && set("dp_close_mt5", v)} label="Cerrar operaciones de MT5" /></SetRow>
+      {winOk ? <CardSave dirty={dirty} save={save} reset={reset} /> : null}
     </Card>
   );
 }

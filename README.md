@@ -19,6 +19,15 @@ Web para operar oro (XAUUSD) en MetaTrader 5 desde el navegador (PC o móvil), c
 - **Backtest** del portafolio con las velas reales de tu bróker. Permite probar otros parámetros, una estrategia nueva o el efecto de la gestión automática.
 - **Cuentas compartidas**: invitas a quien quieras por correo, con acceso de «solo ver» o «puede operar».
 
+## Interfaz
+
+- **Navegación lateral** (barra inferior en el móvil) con seis secciones:
+  - **Operar** y **Mercado** se muestran junto al gráfico.
+  - **Diario**, **Estadísticas**, **Estrategias** y **Ajustes** son páginas completas.
+- La cabecera muestra la cotización en vivo, el balance, el equity, el flotante, los límites de fondeo y los avisos (bloqueo, disciplina, noticia, EA desconectado).
+- Las explicaciones están detrás del icono ⓘ, para que cada pantalla muestre primero los datos.
+- Tipografía IBM Plex, servida desde la propia web (la CSP no permite fuentes externas).
+
 ## Cómo funciona
 
 ```

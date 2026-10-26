@@ -253,23 +253,23 @@ try {
     await shot("03_cuenta");
   });
   await step("señales con IA", async () => {
-    await page.getByRole("button", { name: "Señales" }).click();
-    await page.getByText("ESCENARIO ACTUAL", { exact: false }).first().waitFor({ timeout: 10000 });
-    await page.getByText("QUÉ TE CONVIENE HACER", { exact: false }).first().waitFor();
-    await page.getByRole("button", { name: "Predecir próximas horas" }).click();
+    await page.getByRole("button", { name: "Mercado" }).click();
+    await page.getByRole("heading", { name: "Escenario" }).waitFor({ timeout: 10000 });
+    await page.locator(".tips li").first().waitFor();
+    await page.getByRole("button", { name: "Predicción" }).click();
     await page.waitForTimeout(800);
     await shot("04_senales");
   });
   await step("preparar compra con probabilidades", async () => {
     await page.getByRole("button", { name: "Operar" }).click();
     await page.locator("button.bigbtn.buy").click();
-    await page.getByText("Termina en ganancia").waitFor({ timeout: 8000 });
+    await page.locator(".order-ai-n").waitFor({ timeout: 8000 });
     await shot("05_orden");
   });
   await step("enviar compra al EA", async () => {
     await page.getByRole("button", { name: /Confirmar COMPRA/ }).click();
     await page.getByText(/ejecutada en MT5/).waitFor({ timeout: 10000 });
-    await page.getByText("Posiciones abiertas").waitFor({ timeout: 5000 });
+    await page.getByRole("heading", { name: "Posiciones (1)" }).waitFor({ timeout: 5000 });
     await page.waitForTimeout(1200);
     await shot("06_posicion");
   });
@@ -307,24 +307,27 @@ try {
   });
   await step("ajustes: riesgo", async () => {
     await page.getByRole("button", { name: "Ajustes" }).click();
-    const inp = page.locator(".card", { hasText: "Riesgo (global" }).locator("input").first();
+    const inp = page.locator(".card", { has: page.getByRole("heading", { name: "Riesgo", exact: true }) }).locator("input").first();
     await inp.fill("0.4");
-    await page.getByRole("button", { name: "Guardar", exact: true }).first().click();
+    await page.locator(".savebar").getByRole("button", { name: "Guardar" }).click();
     await page.getByText(/Ajustes enviados al EA/).waitFor({ timeout: 8000 });
     await page.waitForTimeout(1500);
     await shot("08_ajustes");
   });
   await step("temas del gráfico y capas", async () => {
     for (const [name, file] of [["Clásico oscuro", "12_tema_clasico"], ["Oro negro", "13_tema_oro"], ["Papel (claro)", "14_tema_papel"], ["Grafito", "15_tema_grafito"]]) {
+      await page.getByRole("button", { name: "Ajustes" }).click();
+      await page.getByRole("tab", { name: "Gráfico" }).click();
+      if (file === "15_tema_grafito") await shot("17_ajustes_grafico");
       await page.getByRole("button", { name }).click();
-      await page.waitForTimeout(600);
+      await page.getByRole("button", { name: "Operar" }).click();
+      await page.waitForTimeout(900);
       await page.locator(".chartwrap").screenshot({ path: `${shots}/${file}.png` });
     }
     await page.getByRole("button", { name: /Capas/ }).click();
     await page.waitForTimeout(300);
     await page.locator(".chartwrap").screenshot({ path: `${shots}/16_capas.png` });
     await page.getByRole("button", { name: /Capas/ }).click();
-    await shot("17_ajustes_grafico");
   });
   await step("automático ON", async () => {
     await page.locator(".auto .toggle").click();
@@ -334,17 +337,19 @@ try {
   await step("sin chat ni API key", async () => {
     if (await page.getByRole("button", { name: "Chat", exact: true }).count()) throw new Error("sigue la pestaña Chat");
     await page.getByRole("button", { name: "Ajustes" }).click();
+    await page.getByRole("tab", { name: "Modelos y datos" }).click();
     if (await page.getByText(/API key/).count()) throw new Error("sigue el campo de API key");
     await page.getByText("Modelos de la app").waitFor();
   });
   await step("calendario de noticias", async () => {
-    await page.getByRole("button", { name: "Señales" }).click();
+    await page.getByRole("button", { name: "Mercado" }).click();
     await page.getByText("Non-Farm Employment Change", { exact: true }).waitFor({ timeout: 10000 });
     if (await page.getByText("German ifo Business Climate").count()) throw new Error("con filtro USD no debería salir EUR");
     await shot("20_noticias");
   });
   await step("filtro de noticias y gestión automática", async () => {
     await page.getByRole("button", { name: "Ajustes" }).click();
+    await page.getByRole("tab", { name: "Automatización" }).click();
     const news = page.locator(".card", { has: page.getByText("Filtro de noticias", { exact: true }) });
     await news.locator(".toggle").first().click();
     await news.getByRole("button", { name: "Guardar" }).click();
@@ -363,7 +368,7 @@ try {
     await page.getByText("Días operados (mínimo 3)").waitFor();
     await page.getByText("Factor beneficio").waitFor();
     await page.locator(".cal").waitFor();
-    await page.locator(".panel").evaluate((el) => el.scrollTo(0, 0));
+    await page.locator(".page").evaluate((el) => el.scrollTo(0, 0));
     await shot("22_estadisticas");
     await page.locator(".cal").scrollIntoViewIfNeeded();
     await shot("23_calendario");
@@ -419,6 +424,7 @@ try {
   });
   await step("protector de disciplina", async () => {
     await page.getByRole("button", { name: "Ajustes" }).click();
+    await page.getByRole("tab", { name: "Automatización" }).click();
     const dp = page.locator(".card", { has: page.getByText("Protector de disciplina", { exact: true }) });
     await dp.locator(".toggle").first().click();
     await dp.getByLabel("Pérdidas seguidas para parar el día · desactivado").fill("2");
@@ -445,11 +451,12 @@ try {
     const ACC2 = "a1b2c3d4-0000-4000-8000-000000000002";
     db.accounts.push({ id: ACC2, owner: UID, name: "FundingPips 5k Master", login: 40000361087, server: "FundingPips-Live", symbol: "XAUUSD", created_at: "2026-10-21T00:00:00Z" });
     await page.getByRole("button", { name: "Ajustes" }).click();
+    await page.getByRole("tab", { name: "Copiador" }).click();
     const cc = page.locator(".card", { has: page.getByText("Copiador entre cuentas", { exact: true }) });
     await cc.getByText("Esta cuenta no copia ninguna otra.").waitFor();
     await cc.getByRole("button", { name: "Copiar otra cuenta" }).click();
     await cc.locator("select").first().selectOption(ACC2);
-    await cc.getByRole("button", { name: "Riesgo %" }).click();
+    await cc.getByRole("radio", { name: "Riesgo %" }).click();
     await cc.getByRole("button", { name: "Empezar a copiar" }).click();
     await cc.getByText(/Copia de FundingPips 5k Master/).waitFor({ timeout: 5000 });
     const l = db.copy_links[0];
@@ -472,6 +479,7 @@ try {
     await shot("10_backtest");
   });
   await step("operaciones en H1", async () => {
+    await page.getByRole("button", { name: "Operar" }).click();
     await page.getByRole("button", { name: "H1", exact: true }).click();
     await page.waitForTimeout(1200);
     await page.locator(".chartwrap").screenshot({ path: `${shots}/18_h1_operaciones.png` });

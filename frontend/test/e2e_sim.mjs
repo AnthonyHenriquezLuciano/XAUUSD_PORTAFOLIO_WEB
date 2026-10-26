@@ -10,7 +10,7 @@ await page.route("https://neqfafcelxgcxroicmer.supabase.co/**", (r) => r.fulfill
 await page.goto("http://localhost:4173/");
 await page.getByRole("button", { name: "Probar el simulador sin cuenta" }).click();
 
-await page.getByText("SIMULADOR", { exact: true }).waitFor({ timeout: 15000 });
+await page.locator(".acct-n", { hasText: "Cuenta de demostración" }).waitFor({ timeout: 15000 });
 await page.waitForTimeout(3000);
 await page.locator("button.bigbtn.buy").click();
 await page.getByRole("button", { name: /Confirmar COMPRA/ }).click();

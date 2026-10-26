@@ -2,8 +2,8 @@ import React, { useState } from "react";
 import AccountDialog from "./components/AccountDialog";
 import Chart from "./components/Chart";
 import Header from "./components/Header";
+import { Icon } from "./icons";
 import Journal from "./panels/Journal";
-import Positions from "./panels/Positions";
 import Settings from "./panels/Settings";
 import Signals from "./panels/Signals";
 import Stats from "./panels/Stats";
@@ -12,39 +12,54 @@ import Trade from "./panels/Trade";
 import { tstr, useApp } from "./store";
 import { useUI } from "./uiState";
 
-const TABS: [string, string][] = [["operar", "Operar"], ["senales", "Señales"], ["posiciones", "Posiciones"], ["diario", "Diario"], ["stats", "Estadísticas"], ["estrategias", "Estrategias"], ["ajustes", "Ajustes"]];
+const NAV: [string, string, string][] = [
+  ["operar", "Operar", "trade"],
+  ["mercado", "Mercado", "market"],
+  ["diario", "Diario", "journal"],
+  ["stats", "Estadísticas", "stats"],
+  ["estrategias", "Estrategias", "strategies"],
+  ["ajustes", "Ajustes", "settings"],
+];
+const CHART_VIEWS = new Set(["operar", "mercado"]);
 
 export default function App({ signedIn, onExitSim }: { signedIn: boolean; onExitSim?: () => void }) {
   const { s, toasts } = useApp();
   const ui = useUI();
   const [logOpen, setLogOpen] = useState(false);
-  const panel = { operar: <Trade />, senales: <Signals />, posiciones: <Positions />, diario: <Journal />, stats: <Stats />, estrategias: <Strategies />, ajustes: <Settings /> }[ui.tab];
+  const view = NAV.some(([k]) => k === ui.tab) ? ui.tab : "operar";
+  const withChart = CHART_VIEWS.has(view);
+  const page = { diario: <Journal />, stats: <Stats />, estrategias: <Strategies />, ajustes: <Settings /> }[view as "diario"];
   return (
-    <div className="app">
+    <div className={`app ${withChart ? "v-chart" : "v-page"}`}>
       <Header onExitSim={onExitSim} />
-      <div className="main">
-        <Chart />
-        <div className="side">
-          <div className="tabs">
-            {TABS.map(([k, l]) => (
-              <button key={k} className={`tab ${ui.tab === k ? "on" : ""}`} onClick={() => ui.setTab(k)}>
-                {l}{k === "posiciones" && s.positions.length ? ` (${s.positions.length})` : ""}
-              </button>
-            ))}
-          </div>
-          <div className="panel">{panel}</div>
-        </div>
-      </div>
-      <div className="log">
-        <div className="head" onClick={() => setLogOpen(!logOpen)}>
+      <nav className="rail" aria-label="Secciones">
+        {NAV.map(([k, label, icon]) => (
+          <button key={k} className={`rail-btn ${view === k ? "on" : ""}`} aria-current={view === k ? "page" : undefined} aria-label={label} title={label} onClick={() => ui.setTab(k)}>
+            <span className="rail-ic"><Icon name={icon} size={20} />{k === "operar" && s.positions.length ? <b className="badge">{s.positions.length}</b> : null}</span>
+            <span className="rail-t">{label}</span>
+          </button>
+        ))}
+      </nav>
+      {withChart ? (
+        <main className="work">
+          <Chart />
+          <aside className="side" aria-label={view === "operar" ? "Operar" : "Mercado"}>
+            {view === "operar" ? <Trade /> : <Signals />}
+          </aside>
+        </main>
+      ) : (
+        <main className="page"><div className="page-in">{page}</div></main>
+      )}
+      <footer className="log">
+        <button className="log-head" onClick={() => setLogOpen(!logOpen)} aria-expanded={logOpen}>
           <span className={`dot ${s.ea?.online ? "ok" : ""}`} title={s.ea?.online ? "EA conectado" : "EA sin conexión"} />
-          <span className="grow" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.events[0] ? s.events[0].msg : "Registro de actividad"}</span>
-          <span>{logOpen ? "▾" : "▸"} Registro</span>
-        </div>
-        {logOpen ? <div className="body">{s.events.map((e, i) => <div key={i} className={e.level}>{tstr(e.t)}  {e.msg}</div>)}</div> : null}
-      </div>
+          <span className="grow log-last">{s.events[0] ? s.events[0].msg : "Sin actividad"}</span>
+          <span className="log-tg">Registro <Icon name="chevron" size={14} className={logOpen ? "flip" : ""} /></span>
+        </button>
+        {logOpen ? <div className="log-body">{s.events.map((e, i) => <div key={i} className={e.level}><span className="dim">{tstr(e.t)}</span> {e.msg}</div>)}</div> : null}
+      </footer>
       <AccountDialog signedIn={signedIn} />
-      <div className="toasts">{toasts.map((t) => <div key={t.id} className={`toast ${t.kind}`}>{t.msg}</div>)}</div>
+      <div className="toasts" role="status" aria-live="polite">{toasts.map((t) => <div key={t.id} className={`toast ${t.kind}`}>{t.msg}</div>)}</div>
     </div>
   );
 }

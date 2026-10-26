@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./lib/supabase";
 import { Field } from "./ui";
+import { Logo } from "./icons";
 
 export function useSession() {
   const [session, setSession] = useState<Session | null>(null);
@@ -18,9 +19,25 @@ export function useSession() {
   return { session, loading, recovery, clearRecovery: () => setRecovery(false) };
 }
 
-const Logo = ({ size = 40 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#1a2030" /><path d="M7 22l6-8 5 5 7-10" stroke="#e0b04f" strokeWidth="3" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>
-);
+// Línea decorativa del fondo de la pantalla de acceso (forma de una sesión de oro, no son datos reales)
+const SPARK = Array.from({ length: 90 }, (_, i) => {
+  const y = 62 - i * 0.32 + 7 * Math.sin(i / 5.5) + 3.5 * Math.sin(i / 1.9) + (i > 55 ? (i - 55) * 0.5 : 0) * -0.6;
+  return `${(i / 89) * 100},${y.toFixed(2)}`;
+}).join(" ");
+function Art() {
+  return (
+    <div className="login-art">
+      <svg className="spark" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+        <defs><linearGradient id="sp-f" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#d8a23c" stopOpacity=".22" /><stop offset="1" stopColor="#d8a23c" stopOpacity="0" /></linearGradient></defs>
+        <polygon points={`0,100 ${SPARK} 100,100`} fill="url(#sp-f)" />
+        <polyline points={SPARK} fill="none" stroke="#d8a23c" strokeWidth=".35" vectorEffect="non-scaling-stroke" style={{ strokeWidth: 1.5 }} />
+      </svg>
+      <div className="brand"><Logo size={30} /><span className="brand-t">XAU <b>Portfolio</b></span></div>
+      <h2>Opera oro con tus reglas de fondeo.</h2>
+      <p>Portafolio automático, señales y diario evaluado para XAUUSD en MetaTrader 5.</p>
+    </div>
+  );
+}
 
 function errText(m: string) {
   if (/Invalid login credentials/i.test(m)) return "Correo o contraseña incorrectos.";
@@ -60,23 +77,26 @@ export function Login({ onSim }: { onSim: () => void }) {
     } finally { setBusy(false); }
   };
 
+  const go = (m: "in" | "up" | "reset") => (e: React.MouseEvent) => { e.preventDefault(); setMode(m); setMsg(null); };
   return (
     <div className="login-bg">
-      <form className="login card" onSubmit={submit}>
-        <div className="row" style={{ gap: 10, marginBottom: 6 }}><Logo /><div><div style={{ fontSize: 20, fontWeight: 700 }}>XAU <span className="gold">Portfolio AI</span></div><div className="small muted">Oro · MetaTrader 5 · FundingPips</div></div></div>
-        <h3 style={{ margin: "10px 0 4px" }}>{mode === "in" ? "Entrar" : mode === "up" ? "Crear cuenta" : "Recuperar contraseña"}</h3>
-        <Field label="Correo"><input type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
-        {mode !== "reset" ? <Field label="Contraseña"><input type="password" autoComplete={mode === "in" ? "current-password" : "new-password"} required minLength={mode === "up" ? 8 : undefined} value={pw} onChange={(e) => setPw(e.target.value)} /></Field> : null}
-        {msg ? <div className={msg.k === "err" ? "errbox" : "okbox"}>{msg.t}</div> : null}
-        <button className="btn primary" type="submit" disabled={busy} style={{ width: "100%", marginTop: 4 }}>{busy ? "Un momento…" : mode === "in" ? "Entrar" : mode === "up" ? "Crear cuenta" : "Enviar enlace"}</button>
-        <div className="row between small" style={{ marginTop: 6 }}>
-          {mode !== "in" ? <a href="#" onClick={(e) => { e.preventDefault(); setMode("in"); setMsg(null); }}>Ya tengo cuenta</a> : <a href="#" onClick={(e) => { e.preventDefault(); setMode("up"); setMsg(null); }}>Crear cuenta</a>}
-          {mode === "in" ? <a href="#" onClick={(e) => { e.preventDefault(); setMode("reset"); setMsg(null); }}>Olvidé mi contraseña</a> : <span />}
-        </div>
-        <div className="hint" style={{ marginTop: 6 }}>Solo tú y las personas que invites ven tus cuentas. Si te invitaron, crea tu cuenta con el mismo correo de la invitación.</div>
-        <hr className="sep" />
-        <button className="btn ghost" type="button" onClick={onSim} style={{ width: "100%" }}>Probar el simulador sin cuenta</button>
-      </form>
+      <Art />
+      <div className="login-side">
+        <form className="login" onSubmit={submit}>
+          <h1>{mode === "in" ? "Entrar" : mode === "up" ? "Crear cuenta" : "Recuperar contraseña"}</h1>
+          <div className="sub">{mode === "in" ? "Accede a tus cuentas de MT5." : mode === "up" ? "Usa el correo de tu invitación si te invitaron." : "Te enviaremos un enlace."}</div>
+          <Field label="Correo"><input type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
+          {mode !== "reset" ? <Field label="Contraseña"><input type="password" autoComplete={mode === "in" ? "current-password" : "new-password"} required minLength={mode === "up" ? 8 : undefined} value={pw} onChange={(e) => setPw(e.target.value)} /></Field> : null}
+          {msg ? <div className={msg.k === "err" ? "note bad" : "note ok"}>{msg.t}</div> : null}
+          <button className="btn primary" type="submit" disabled={busy} style={{ width: "100%", padding: "10px" }}>{busy ? "Un momento…" : mode === "in" ? "Entrar" : mode === "up" ? "Crear cuenta" : "Enviar enlace"}</button>
+          <div className="login-links">
+            {mode !== "in" ? <a href="#" onClick={go("in")}>Ya tengo cuenta</a> : <a href="#" onClick={go("up")}>Crear cuenta</a>}
+            {mode === "in" ? <a href="#" onClick={go("reset")}>Olvidé mi contraseña</a> : <span />}
+          </div>
+          <hr className="sep" />
+          <button className="btn" type="button" onClick={onSim} style={{ width: "100%" }}>Probar el simulador sin cuenta</button>
+        </form>
+      </div>
     </div>
   );
 }
@@ -91,12 +111,15 @@ export function NewPassword({ done }: { done: () => void }) {
   };
   return (
     <div className="login-bg">
-      <form className="login card" onSubmit={save}>
-        <h3 style={{ margin: 0 }}>Nueva contraseña</h3>
-        <Field label="Contraseña nueva (mín. 8 caracteres)"><input type="password" autoComplete="new-password" minLength={8} required value={pw} onChange={(e) => setPw(e.target.value)} /></Field>
-        {msg ? <div className="errbox">{msg}</div> : null}
-        <button className="btn primary" type="submit">Guardar</button>
-      </form>
+      <Art />
+      <div className="login-side">
+        <form className="login" onSubmit={save}>
+          <h1>Nueva contraseña</h1>
+          <Field label="Contraseña nueva (mínimo 8 caracteres)"><input type="password" autoComplete="new-password" minLength={8} required value={pw} onChange={(e) => setPw(e.target.value)} /></Field>
+          {msg ? <div className="note bad">{msg}</div> : null}
+          <button className="btn primary" type="submit">Guardar contraseña</button>
+        </form>
+      </div>
     </div>
   );
 }

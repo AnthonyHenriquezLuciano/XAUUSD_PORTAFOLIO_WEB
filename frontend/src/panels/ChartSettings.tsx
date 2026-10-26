@@ -1,7 +1,7 @@
 import React from "react";
 import { alpha, ChartTheme, THEMES } from "../chart/themes";
 import { useUI } from "../uiState";
-import { Card, Seg, Toggle } from "../ui";
+import { Card, Seg, SetRow, Toggle } from "../ui";
 
 // Miniatura del tema: velas, una caja de rango, un nivel y una orden de estrategia
 function Preview({ t, hollow }: { t: ChartTheme; hollow: boolean }) {
@@ -31,22 +31,22 @@ export function ChartSettings() {
   const ui = useUI();
   const p = ui.chart;
   return (
-    <Card title="Gráfico">
-      <div className="theme-grid">
-        {THEMES.map((t) => (
-          <button key={t.id} className={`theme-card ${p.theme === t.id ? "on" : ""}`} onClick={() => ui.setChart({ theme: t.id })} aria-pressed={p.theme === t.id}>
-            <Preview t={t} hollow={p.candles === "huecas"} />
-            <span>{t.name}</span>
-          </button>
-        ))}
-      </div>
-      <div className="row between" style={{ marginTop: 10 }}>
-        <span>Velas</span>
-        <Seg value={p.candles} options={[["rellenas", "Rellenas"], ["huecas", "Huecas al alza"]]} onChange={(v) => ui.setChart({ candles: v })} />
-      </div>
-      <div className="row between" style={{ padding: "6px 0" }}><span>Cuadrícula</span><Toggle on={p.grid} onChange={(v) => ui.setChart({ grid: v })} /></div>
-      <div className="row between" style={{ padding: "6px 0" }}><span>Zonas de riesgo / beneficio de las posiciones</span><Toggle on={p.rr} onChange={(v) => ui.setChart({ rr: v })} /></div>
-      <div className="hint">Se guarda en este navegador. Las capas (rangos, niveles, estrategias y operaciones) se activan en el botón «Capas» del gráfico.</div>
-    </Card>
+    <div className="cols-side wide-left">
+      <Card title="Tema del gráfico">
+        <div className="theme-grid">
+          {THEMES.map((t) => (
+            <button key={t.id} className={`theme-card ${p.theme === t.id ? "on" : ""}`} onClick={() => ui.setChart({ theme: t.id })} aria-pressed={p.theme === t.id}>
+              <Preview t={t} hollow={p.candles === "huecas"} />
+              <span>{t.name}</span>
+            </button>
+          ))}
+        </div>
+      </Card>
+      <Card title="Estilo" tip="Se guarda en este navegador. Rangos, niveles, estrategias y operaciones se activan en «Capas», en el propio gráfico.">
+        <SetRow label="Velas"><Seg value={p.candles} options={[["rellenas", "Rellenas"], ["huecas", "Huecas"]]} onChange={(v) => ui.setChart({ candles: v })} /></SetRow>
+        <SetRow label="Cuadrícula"><Toggle on={p.grid} onChange={(v) => ui.setChart({ grid: v })} label="Cuadrícula" /></SetRow>
+        <SetRow label="Zonas de riesgo y beneficio" tip="Sombrea el SL y el TP de las posiciones abiertas."><Toggle on={p.rr} onChange={(v) => ui.setChart({ rr: v })} label="Zonas de riesgo y beneficio" /></SetRow>
+      </Card>
+    </div>
   );
 }

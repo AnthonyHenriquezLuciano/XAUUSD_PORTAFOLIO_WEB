@@ -5,7 +5,8 @@ import { createSim } from "../demo/sim";
 import { SUPABASE_ANON_JWT, SUPABASE_URL, supabase } from "../lib/supabase";
 import { useApp } from "../store";
 import { useUI } from "../uiState";
-import { Field } from "../ui";
+import { Tip } from "../ui";
+import { Icon } from "../icons";
 
 const LAST = "xauai.lastAccount";
 export const rememberAccount = (id: string | null) => { try { if (id) localStorage.setItem(LAST, id); else localStorage.removeItem(LAST); } catch { /* sin almacenamiento */ } };
@@ -75,47 +76,46 @@ export default function AccountDialog({ signedIn }: { signedIn: boolean }) {
     if (error) toast(error.message, "error"); else { if (lastAccount() === a.id) rememberAccount(null); load(); }
   };
 
+  const roleTxt = (r: string) => (r === "owner" ? "Propietario" : r === "trader" ? "Puede operar" : "Solo ver");
   return (
     <div className="modal-bg" onClick={(e) => { if (e.target === e.currentTarget) close(); }}>
-      <div className="modal" style={{ width: "min(680px, 100%)" }} role="dialog" aria-modal="true">
+      <div className="modal" style={{ width: "min(640px, 100%)" }} role="dialog" aria-modal="true" aria-label="Cuentas">
         {view.k === "list" ? (
-          <div className="col">
-            <div className="row between"><h3 style={{ margin: 0 }}>Cuentas</h3>{currentBackend() ? <button className="btn sm ghost" onClick={close}>Cerrar</button> : null}</div>
+          <div className="stack">
+            <div className="row between"><h3>Cuentas</h3>{currentBackend() ? <button className="iconbtn" onClick={close} aria-label="Cerrar"><Icon name="close" size={16} /></button> : null}</div>
             {signedIn ? (
-              <>
-                {loading ? <div className="hint">Cargando…</div> : null}
-                {!loading && !accs.length ? <div className="hint">Aún no tienes cuentas. Crea una (una por cada cuenta de MT5 que quieras ver y operar desde aquí) y conecta el EA puente.</div> : null}
+              <div>
+                {loading ? <div className="empty-s">Cargando…</div> : null}
+                {!loading && !accs.length ? <div className="empty-s">Crea una cuenta por cada MT5 que quieras ver y operar desde aquí.</div> : null}
                 {accs.map((a) => {
                   const online = a.live?.updated_at && Date.now() - Date.parse(a.live.updated_at) < 15000;
+                  const cur = s.accountInfo?.id === a.id;
                   return (
-                    <div key={a.id} className="acc" style={{ cursor: "default" }}>
-                      <div className="row between wrap" style={{ gap: 8 }}>
-                        <div>
-                          <div className="row" style={{ gap: 6 }}><span className={`dot ${online ? "ok" : ""}`} /><b>{a.name}</b><span className="chip">{a.role === "owner" ? "propietario" : a.role === "trader" ? "puede operar" : "solo ver"}</span></div>
-                          <div className="small muted">{a.login ? `${a.login} · ${a.server} · ${a.symbol || "XAUUSD"}` : "EA sin conectar todavía"} · EA {online ? "conectado" : `visto ${ago(a.live?.updated_at)}`}</div>
-                        </div>
-                        <div className="row" style={{ gap: 6 }}>
-                          {a.role === "owner" ? <button className="btn sm" onClick={() => setView({ k: "connect", acc: a })}>Conectar EA</button> : null}
-                          {a.role === "owner" ? <button className="btn sm" onClick={() => setView({ k: "share", acc: a })}>Compartir</button> : null}
-                          <button className="btn sm primary" disabled={busy} onClick={() => open(a.id)}>{s.accountInfo?.id === a.id ? "Abierta" : "Abrir"}</button>
-                        </div>
+                    <div key={a.id} className={`acc ${cur ? "on" : ""}`}>
+                      <span className={`dot ${online ? "ok" : ""}`} title={online ? "EA conectado" : "EA desconectado"} />
+                      <div className="acc-b">
+                        <div className="acc-n">{a.name}<span className="tag">{roleTxt(a.role)}</span></div>
+                        <div className="acc-s">{a.login ? `${a.login} · ${a.server}` : "EA sin conectar"} · {online ? "EA conectado" : `visto ${ago(a.live?.updated_at)}`}</div>
+                      </div>
+                      <div className="acc-a">
+                        {a.role === "owner" ? <button className="btn xs" onClick={() => setView({ k: "connect", acc: a })} title="Conectar el EA"><Icon name="plug" size={14} />Conectar EA</button> : null}
+                        {a.role === "owner" ? <button className="btn xs" onClick={() => setView({ k: "share", acc: a })} title="Compartir"><Icon name="share" size={14} />Compartir</button> : null}
+                        {a.role === "owner" ? <button className="btn xs ghost" onClick={() => remove(a)} aria-label={`Borrar ${a.name}`} title="Borrar de la web"><Icon name="trash" size={14} /></button> : null}
+                        <button className="btn xs primary" disabled={busy} onClick={() => open(a.id)}>{cur ? "Abierta" : "Abrir"}</button>
                       </div>
                     </div>
                   );
                 })}
-                <div className="card" style={{ marginTop: 4 }}>
-                  <div className="row" style={{ gap: 8 }}>
-                    <input placeholder="Nombre (p. ej. FundingPips 100k fase 1)" value={name} onChange={(e) => setName(e.target.value)} style={{ flex: 1 }} />
-                    <button className="btn primary" disabled={busy} onClick={create}>Nueva cuenta</button>
-                  </div>
+                <div className="newacc">
+                  <input placeholder="Nombre de la cuenta nueva (p. ej. FundingPips 100k F1)" value={name} onChange={(e) => setName(e.target.value)} aria-label="Nombre de la cuenta nueva" />
+                  <button className="btn primary" disabled={busy} onClick={create}><Icon name="plus" size={15} />Nueva cuenta</button>
                 </div>
-              </>
-            ) : <div className="hint">Estás en el simulador sin iniciar sesión. Para conectar tu MT5, cierra el simulador y entra con tu correo.</div>}
-            <div className="row between wrap" style={{ marginTop: 6, gap: 8 }}>
+              </div>
+            ) : <div className="note warn">Estás en el simulador sin sesión. Para conectar tu MT5, sal del simulador y entra con tu correo.</div>}
+            <div className="modal-f">
               <button className="btn" disabled={busy} onClick={async () => { setBusy(true); try { await openSim(); ui.setAccountOpen(false); } catch (e: any) { toast(e.message, "error"); } finally { setBusy(false); } }}>Simulador (días reales de oro)</button>
-              {signedIn ? <button className="btn ghost sm" onClick={async () => { await setBackend(null); await supabase.auth.signOut(); rememberAccount(null); }}>Cerrar sesión</button> : null}
+              {signedIn ? <button className="btn ghost sm" onClick={async () => { await setBackend(null); await supabase.auth.signOut(); rememberAccount(null); }}><Icon name="logout" size={15} />Cerrar sesión</button> : null}
             </div>
-            {accs.some((a) => a.role === "owner") ? <div className="small muted">¿Borrar una cuenta? {accs.filter((a) => a.role === "owner").map((a) => <a key={a.id} href="#" onClick={(e) => { e.preventDefault(); remove(a); }} style={{ marginLeft: 6 }}>{a.name}</a>)}</div> : null}
           </div>
         ) : view.k === "connect" ? <ConnectEA acc={view.acc} back={() => { setView({ k: "list" }); load(); }} open={() => open(view.acc.id)} /> : <Share acc={view.acc} back={() => setView({ k: "list" })} />}
       </div>
@@ -142,28 +142,27 @@ function ConnectEA({ acc, back, open }: { acc: any; back: () => void; open: () =
     if (error) toast(error.message, "error"); else setKey(String(data));
   };
   return (
-    <div className="col">
-      <div className="row between"><h3 style={{ margin: 0 }}>Conectar el EA · {acc.name}</h3><button className="btn sm ghost" onClick={back}>Volver</button></div>
+    <div className="stack">
+      <div className="row between"><h3>Conectar el EA · {acc.name}</h3><button className="btn sm ghost" onClick={back}>Volver</button></div>
       <ol className="steps">
-        <li><b>Descarga el EA</b> <a className="btn sm" href="/ea/XAU_Portfolio_Bridge_v6.mq5" download>XAU_Portfolio_Bridge_v6.mq5</a><div className="small muted">En MT5: Archivo → Abrir carpeta de datos → MQL5 → Experts. Copia ahí el archivo, ábrelo en MetaEditor y pulsa Compilar (F7).</div></li>
-        <li><b>Permite la conexión</b>: MT5 → Herramientas → Opciones → Asesores expertos → marca «Permitir WebRequest para las URL listadas» y añade:<Copy text={SUPABASE_URL} /></li>
-        <li><b>Genera la clave de esta cuenta</b> <button className="btn sm primary" onClick={gen}>Generar clave</button>
-          {key ? <div style={{ marginTop: 6 }}><Copy text={key} /><div className="warnbox small" style={{ marginTop: 4 }}>Cópiala ahora: por seguridad no se vuelve a mostrar (se guarda cifrada). Con ella el EA puede enviar datos a esta cuenta y recibir sus órdenes.</div></div> : null}
+        <li><b>Descarga el EA</b> y cópialo en MT5 → Archivo → Abrir carpeta de datos → MQL5 → Experts. Ábrelo en MetaEditor y compila (F7).
+          <div style={{ marginTop: 8 }}><a className="btn sm" href="/ea/XAU_Portfolio_Bridge_v6.mq5" download>Descargar XAU_Portfolio_Bridge_v6.mq5</a></div></li>
+        <li><b>Permite la conexión</b> en MT5 → Herramientas → Opciones → Asesores expertos → «Permitir WebRequest» y añade:<Copy text={SUPABASE_URL} /></li>
+        <li><b>Genera la clave</b> de esta cuenta. <button className="btn sm primary" onClick={gen}>Generar clave</button>
+          {key ? <><Copy text={key} /><div className="note warn" style={{ marginTop: 6 }}>Cópiala ahora: no se vuelve a mostrar.</div></> : null}
         </li>
-        <li><b>Pon el EA en un gráfico de XAUUSD</b> (cualquier temporalidad) y en «Entradas» rellena:
-          <ul className="small">
-            <li><code>InpBridgeKey</code> = la clave del paso 3.</li>
-            <li><code>InpInitialBalance</code> = balance inicial de la cuenta de fondeo (obligatorio).</li>
-            <li><code>InpTargetPct</code> = 8 en fase 1, 5 en fase 2, 0 si ya está fondeada.</li>
-            <li><code>InpAutoTrade</code> = false (lo activas después desde la web cuando quieras).</li>
-            <li>Las demás entradas pueden quedarse como están. <code>InpWebURL</code> y <code>InpWebAnonKey</code> ya vienen puestas.</li>
-          </ul>
-          Activa el botón <b>Algo Trading</b> de MT5.
+        <li><b>Pon el EA en un gráfico de XAUUSD</b> con estas entradas y activa Algo Trading:
+          <div className="inputs">
+            <code>InpBridgeKey</code><span>la clave del paso 3</span>
+            <code>InpInitialBalance</code><span>balance inicial de la cuenta de fondeo</span>
+            <code>InpTargetPct</code><span>8 en fase 1 · 5 en fase 2 · 0 fondeada</span>
+            <code>InpAutoTrade</code><span>false (lo activas luego desde la web)</span>
+          </div>
         </li>
-        <li><b>Listo.</b> En unos segundos esta cuenta aparece como conectada y el EA empieza a subir el histórico de velas M1 (hasta 180 días, unos minutos).</li>
+        <li><b>Listo.</b> En segundos la cuenta aparece conectada y el EA sube el histórico de velas.</li>
       </ol>
-      <details className="small"><summary>Datos técnicos</summary><div className="muted">El EA llama cada segundo a la función <code>bridge_sync</code> con su clave. Clave pública del servidor (ya incluida en el EA):</div><Copy text={SUPABASE_ANON_JWT} /></details>
-      <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}><button className="btn" onClick={back}>Volver</button><button className="btn primary" onClick={open}>Abrir la cuenta</button></div>
+      <details className="small"><summary>Datos técnicos</summary><div className="muted" style={{ margin: "6px 0" }}>Clave pública del servidor (ya incluida en el EA):</div><Copy text={SUPABASE_ANON_JWT} /></details>
+      <div className="modal-f"><button className="btn" onClick={back}>Volver</button><button className="btn primary" onClick={open}>Abrir la cuenta</button></div>
     </div>
   );
 }
@@ -193,9 +192,8 @@ function Share({ acc, back }: { acc: any; back: () => void }) {
   const delInv = async (id: string) => { await supabase.from("invites").delete().eq("id", id); load(); };
   const roleTxt = (r: string) => r === "owner" ? "propietario" : r === "trader" ? "puede operar" : "solo ver";
   return (
-    <div className="col">
-      <div className="row between"><h3 style={{ margin: 0 }}>Compartir · {acc.name}</h3><button className="btn sm ghost" onClick={back}>Volver</button></div>
-      <div className="hint">Invita por correo. La persona crea su cuenta en esta web con ese mismo correo y verá la cuenta. «Solo ver» no puede operar ni cambiar ajustes; «Puede operar» sí (no puede generar la clave del EA ni compartir).</div>
+    <div className="stack">
+      <div className="row between"><h3>Compartir · {acc.name}<Tip text="La persona crea su cuenta en esta web con ese mismo correo. «Solo ver» no opera ni cambia ajustes; «Puede operar» sí, pero no genera la clave del EA ni comparte." /></h3><button className="btn sm ghost" onClick={back}>Volver</button></div>
       <div className="row wrap" style={{ gap: 6 }}>
         <input type="email" placeholder="correo@ejemplo.com" value={email} onChange={(e) => setEmail(e.target.value)} style={{ flex: 1, minWidth: 180 }} />
         <select value={role} onChange={(e) => setRole(e.target.value)}><option value="viewer">Solo ver</option><option value="trader">Puede operar</option></select>

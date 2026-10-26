@@ -54,18 +54,18 @@ export function marketState(st: BarStore, T: FeatTable | null, m: Models | null,
   const retDay = Number.isFinite(f.ret_day) ? f.ret_day : 0;
   const bias = retDay > 0.15 && ts_ > 0 ? "comprador" : retDay < -0.15 && ts_ < 0 ? "vendedor" : "neutral";
   const tips: string[] = [];
-  if (regime === "alcista" || regime === "bajista") tips.push(`Prioriza entradas a favor de la tendencia (${regime === "alcista" ? "compras" : "ventas"}); las rupturas del portafolio suelen rendir mejor así.`);
-  else if (regime === "rango") tips.push("Mercado lateral: las rupturas fallan más a menudo; espera confirmación o reduce tamaño.");
-  if (vol === "alta" || vol === "extrema") tips.push("Volatilidad alta: el SL en ATR ya se amplía; mantén el riesgo en % y evita entrar en plena vela de noticia.");
-  else if (vol === "baja") tips.push("Volatilidad baja: los objetivos tardan más; el cierre por tiempo cobra importancia.");
+  if (regime === "alcista" || regime === "bajista") tips.push(`Tendencia ${regime}: prioriza ${regime === "alcista" ? "compras" : "ventas"}.`);
+  else if (regime === "rango") tips.push("Mercado lateral: las rupturas fallan más. Espera confirmación.");
+  if (vol === "alta" || vol === "extrema") tips.push("Volatilidad alta: no entres en plena vela de noticia.");
+  else if (vol === "baja") tips.push("Volatilidad baja: los objetivos tardan más en llegar.");
   if (rg && mod >= 540) {
     const [hi, lo] = rg;
-    tips.push(bid > hi ? "El precio está por encima del rango de Asia (ruptura alcista en curso)." : bid < lo ? "El precio está por debajo del rango de Asia (ruptura bajista en curso)." : "El precio sigue dentro del rango de Asia: ALB puede activarse en cualquiera de los dos lados.");
+    tips.push(bid > hi ? "Precio por encima del rango de Asia." : bid < lo ? "Precio por debajo del rango de Asia." : "Precio dentro del rango de Asia: ALB puede activarse a ambos lados.");
   }
   const best = strat.filter((s) => s.scenario && s.state === "pendiente").sort((a, b) => b.scenario.expR - a.scenario.expR)[0];
-  if (best) tips.push(`En escenarios como este, la estrategia pendiente con mejor historial es ${best.name} (${best.scenario.expR >= 0 ? "+" : ""}${best.scenario.expR.toFixed(2)} R por operación, ${best.scenario.n_cell} casos).`);
+  if (best) tips.push(`Mejor historial en este escenario: ${best.name} (${best.scenario.expR >= 0 ? "+" : ""}${best.scenario.expR.toFixed(2)} R, ${best.scenario.n_cell} casos).`);
   const p4 = fc?.points.find((p: any) => p.h === 4);
-  if (p4) tips.push(`Rango probable a 4 h (80 %): ${p4.p10.toFixed(2)} – ${p4.p90.toFixed(2)}. La dirección no es predecible con fiabilidad (acierto histórico ~50 %).`);
+  if (p4) tips.push(`Rango probable a 4 h: ${p4.p10.toFixed(2)} – ${p4.p90.toFixed(2)}.`);
   return {
     ok: true, time: tSrv, hour: fhm(mod), session: session(mod), regime, regime_text: regTxt, vol, vol_text: volTxt, trend_score: r2(ts_), atr: r2(f.atr),
     atr_rank: Number.isFinite(f.atr_rank) ? r2(f.atr_rank) : null, rv60: Number.isFinite(f.rv60) ? Math.round(f.rv60 * 1000) / 1000 : null, bias,

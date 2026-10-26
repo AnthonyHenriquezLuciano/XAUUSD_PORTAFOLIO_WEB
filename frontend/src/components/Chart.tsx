@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { createChart, CrosshairMode, IChartApi, IPriceLine, ISeriesApi, LineStyle, UTCTimestamp } from "lightweight-charts";
 import { ChartOverlay } from "../chart/overlay";
 import DrawingTools from "./DrawingTools";
+import { Icon, Logo } from "../icons";
 import { alpha, themeById } from "../chart/themes";
 import { api } from "../api";
 import { fmt, useApp } from "../store";
@@ -342,23 +343,20 @@ export default function Chart() {
           {Object.keys(TF_SEC).map((k) => <button key={k} className={tf === k ? "on" : ""} onClick={() => setTf(k)}>{k}</button>)}
         </div>
         <div className="layers-wrap">
-          <button className={`btn sm ${layersOpen ? "primary" : ""}`} onClick={() => setLayersOpen(!layersOpen)} aria-expanded={layersOpen}>Capas ▾</button>
+          <button className={`btn sm ${layersOpen ? "on" : ""}`} onClick={() => setLayersOpen(!layersOpen)} aria-expanded={layersOpen}>Capas <Icon name="chevron" size={13} /></button>
           {layersOpen ? (
             <div className="layers-menu" onMouseLeave={() => setLayersOpen(false)}>
               {([["rangos", "Rangos de sesión", th.zone.asia], ["niveles", "Niveles clave", th.level.pd], ["estrategias", "Órdenes de las estrategias", th.buy], ["operaciones", "Operaciones (entrada → salida)", th.win], ["noticias", "Noticias USD", th.sl]] as [string, string, string][]).map(([k, l, c]) => (
                 <label key={k} className="layer-item"><input type="checkbox" checked={ui.layers[k] !== false} onChange={(e) => ui.setLayer(k, e.target.checked)} /><i style={{ background: c }} />{l}</label>
               ))}
               <label className="layer-item"><input type="checkbox" checked={ui.chart.rr} onChange={(e) => ui.setChart({ rr: e.target.checked })} /><i style={{ background: th.tp }} />Zonas de riesgo / beneficio</label>
-              <div className="small muted" style={{ padding: "4px 6px 2px" }}>Colores y estilo: Ajustes → Gráfico</div>
             </div>
           ) : null}
         </div>
-        <button className={`btn sm ${drawOpen ? "primary" : ""}`} title="Herramientas de dibujo" aria-pressed={drawOpen}
-          onClick={() => { const v = !drawOpen; setDrawOpen(v); try { localStorage.setItem("xauai.drawopen", v ? "1" : "0"); } catch { /* sin almacenamiento */ } }}>✎ Dibujo</button>
+        <button className={`btn sm ${drawOpen ? "on" : ""}`} title="Herramientas de dibujo" aria-pressed={drawOpen}
+          onClick={() => { const v = !drawOpen; setDrawOpen(v); try { localStorage.setItem("xauai.drawopen", v ? "1" : "0"); } catch { /* sin almacenamiento */ } }}><Icon name="edit" size={14} />Dibujo</button>
         <div className="spacer" />
-        <button className={`btn sm ${ui.showForecast ? "primary" : ""}`} onClick={() => ui.setShowForecast(!ui.showForecast)} disabled={!fc}>
-          {ui.showForecast ? "Ocultar predicción" : "Predecir próximas horas"}
-        </button>
+        <button className={`btn sm ${ui.showForecast ? "on" : ""}`} onClick={() => ui.setShowForecast(!ui.showForecast)} disabled={!fc} aria-pressed={ui.showForecast} title="Rango probable de las próximas horas">Predicción</button>
         {s.sim ? <SimControls /> : null}
       </div>
       <div className="chart">
@@ -383,21 +381,12 @@ export default function Chart() {
               </> : null}
             </div>
           ) : null}
-          {connected && s.broker === "cloud" && !s.ea?.online ? (
-            <div className="box small" style={{ borderColor: "var(--warn)" }}>
-              <b style={{ color: "var(--warn)" }}>EA desconectado</b>. Se muestran las últimas velas guardadas{s.market?.last_tick ? ` (último precio ${new Date(s.market.last_tick * 1000).toISOString().slice(0, 16).replace("T", " ")} hora del servidor)` : ""}.<br />
-              <span className="muted">Abre MT5 con el EA puente en el gráfico para ver el precio en vivo y operar. Las estrategias automáticas también necesitan el EA en marcha.</span>
-            </div>
-          ) : connected && s.market && s.market.open === false && !s.sim ? (
-            <div className="box small" style={{ borderColor: "var(--warn)" }}>
-              <b style={{ color: "var(--warn)" }}>Mercado cerrado</b> ({s.market.reason}). Se muestra el último precio{s.market.last_tick ? ` (${new Date(s.market.last_tick * 1000).toISOString().slice(0, 16).replace("T", " ")} hora del servidor)` : ""}.<br />
-              <span className="muted">El oro reabre el lunes a la 01:00 hora del servidor (domingo por la noche en América). Mientras tanto puedes revisar señales, diario, backtests y ajustes.</span>
-            </div>
+          {connected && s.market && s.market.open === false && !s.sim && s.ea?.online ? (
+            <div className="box small"><b style={{ color: "var(--warn)" }}>Mercado cerrado</b>{s.market.last_tick ? ` · último precio ${new Date(s.market.last_tick * 1000).toISOString().slice(11, 16)} (servidor)` : ""}</div>
           ) : null}
           {ui.showForecast && p4 ? (
             <div className="box small">
-              <b className="gold">Cono 80 %</b> a 4 h: {fmt(p4.p10)} – {fmt(p4.p90)}<br />
-              <span className="muted">Rango de volatilidad calibrado. La dirección no es predecible (acierto ~50 %).</span>
+              <b className="gold">Rango 80 % a 4 h</b> {fmt(p4.p10)} – {fmt(p4.p90)}
             </div>
           ) : null}
           {ui.preview ? <div className="box small gold">Arrastra las líneas SL / TP{ui.preview.kind !== "market" ? " / entrada" : ""} en el gráfico</div> : null}
@@ -414,7 +403,6 @@ function SimControls() {
   const set = (b: any) => api("/api/sim", "POST", b).catch(() => {});
   return (
     <div className="row small">
-      <span className="chip gold">Simulación</span>
       <button className="btn sm" onClick={() => set({ paused: !s.sim?.paused })}>{s.sim?.paused ? "▶ Reanudar" : "❚❚ Pausa"}</button>
       <select value={s.sim?.speed} onChange={(e) => set({ speed: Number(e.target.value) })}>
         {[1, 10, 60, 300, 1200].map((v) => <option key={v} value={v}>{v === 1 ? "Tiempo real" : `x${v}`}</option>)}
@@ -429,9 +417,8 @@ function ConnectOverlay() {
   return (
     <div className="overlay-empty">
       <div className="col" style={{ alignItems: "center", textAlign: "center", maxWidth: 420 }}>
-        <svg width="54" height="54" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="#161a22" /><path d="M7 22l6-8 5 5 7-10" stroke="#e0b04f" strokeWidth="3" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>
-        <h2 style={{ margin: "6px 0 0" }}>XAU Portfolio AI</h2>
-        <div className="muted">{s.status === "conectando" ? "Cargando la cuenta y sus velas…" : "Elige una cuenta conectada a tu MT5 o prueba el simulador con días reales de oro."}</div>
+        <Logo size={44} />
+        <div className="muted">{s.status === "conectando" ? "Cargando la cuenta…" : "Elige una cuenta o prueba el simulador."}</div>
         <button className="btn primary" onClick={() => ui.setAccountOpen(true)} disabled={s.status === "conectando"}>{s.status === "conectando" ? "Cargando…" : "Elegir cuenta"}</button>
       </div>
     </div>
