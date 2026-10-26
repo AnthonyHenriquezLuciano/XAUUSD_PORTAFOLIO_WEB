@@ -153,7 +153,7 @@ export default function Stats() {
 
   return (
     <div className="stack">
-      <PageHead title="Estadísticas">
+      <PageHead title="Rendimiento y estadísticas" sub="Resultados, riesgo y consistencia según los registros de operaciones de la cuenta.">
         <Seg value={src} options={[["todas", "Todas"], ["estrategia", "Portafolio"], ["manual", "Manuales"], ["otro", "Otros EA"]]} onChange={setSrc} />
         <label className="date-f"><span>Desde</span><input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />{from ? <button className="iconbtn" onClick={() => setFrom("")} aria-label="Quitar fecha">✕</button> : null}</label>
       </PageHead>
@@ -192,7 +192,7 @@ export default function Stats() {
             <Card title="Curva de resultados"><Curve list={list} /></Card>
             <Calendar list={list} />
           </div>
-          <Card title="Desglose" right={<select value={by} onChange={(e) => setBy(e.target.value as any)} aria-label="Agrupar por"><option value="estrategia">Por estrategia</option><option value="hora">Por hora</option><option value="dia">Por día</option><option value="lado">Compras / ventas</option><option value="salida">Por salida</option></select>}>
+          <Card title="Análisis por segmento" right={<select value={by} onChange={(e) => setBy(e.target.value as any)} aria-label="Agrupar por"><option value="estrategia">Por estrategia</option><option value="hora">Por hora</option><option value="dia">Por día</option><option value="lado">Compras / ventas</option><option value="salida">Por salida</option></select>}>
             <table className="t">
               <thead><tr><th>{by === "estrategia" ? "Estrategia" : by === "hora" ? "Hora (servidor)" : by === "dia" ? "Día" : by === "lado" ? "Lado" : "Salida"}</th><th className="n">Ops</th><th className="n">Acierto</th><th className="n">R medio</th><th className="n">Resultado</th></tr></thead>
               <tbody>{rows.map((x) => <tr key={String(x.k)}><td>{x.k}</td><td className="n">{x.n}</td><td className="n">{pct(x.win)}</td><td className={`n ${(x.expR ?? 0) >= 0 ? "buy" : "sell"}`}>{x.expR == null ? "–" : x.expR.toFixed(2)}</td><td className={`n ${x.net >= 0 ? "buy" : "sell"}`}>{x.net >= 0 ? "+" : ""}{fmt(x.net)}</td></tr>)}</tbody>
