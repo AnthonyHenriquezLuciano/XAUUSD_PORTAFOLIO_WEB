@@ -110,3 +110,31 @@ body { background: radial-gradient(ellipse 80% 48% at 60% -20%, #242017 0%, var(
   .premium-module,.premium-meter>div { transition:none; }
   .premium-module:hover { transform:none; }
 }
+
+
+/* Smart ticket: estimated headroom before submitting a live order. */
+.premium-ticket-risk { display:flex; flex-direction:column; gap:7px; padding:12px; margin:12px 0; background:#111316; border:1px solid rgba(191,148,82,.28); border-radius:10px; }
+.premium-ticket-risk>div { display:flex; gap:12px; align-items:baseline; justify-content:space-between; }
+.premium-ticket-risk span { color:var(--muted); font-size:11px; }
+.premium-ticket-risk b { font:600 12px var(--mono); text-align:right; }
+.premium-ticket-risk p { color:var(--dim); font-size:10px; margin:4px 0 0; }
+/* Research Lab */
+.premium-lab-tabs { display:flex; gap:7px; padding-bottom:7px; overflow-x:auto; scrollbar-width:thin; }
+.premium-lab-tabs button { white-space:nowrap; padding:10px 16px; border:1px solid var(--line2); border-radius:9px; background:#141619; color:var(--muted); }
+.premium-lab-tabs button.on { color:var(--gold-hi); border-color:var(--gold); background:var(--gold-soft); }
+.premium-lab-card { display:flex; flex-direction:column; gap:15px; min-width:0; padding:24px; background:linear-gradient(135deg,#1a1b1e,#101317 70%); border-radius:14px; border:1px solid var(--line); }
+.premium-lab-card h2 { font-size:19px; }
+.premium-lab-card>.btn { align-self:flex-start; }
+.premium-lab-inputs { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
+.premium-lab-inputs label { display:flex; flex-direction:column; gap:7px; font-size:11px; color:var(--muted); }
+.premium-lab-inputs label>input,.premium-lab-inputs label>select { width:100%; }
+.premium-research-result { padding:15px; background:#0e1114; border:1px solid rgba(191,148,82,.25); border-radius:10px; }
+.premium-research-result>b { color:var(--gold-hi); }
+.premium-shadow { display:grid; grid-template-columns:1fr 1.5fr 120px; gap:12px; align-items:center; padding:13px 15px; border:1px solid var(--line); border-radius:10px; }
+.premium-shadow>div { min-width:0; display:flex; flex-direction:column; gap:4px; }
+.premium-shadow>div:last-child { align-items:end; }
+.premium-shadow small,.premium-shadow span { font-size:11px; color:var(--muted); }
+.premium-shadow>div:last-child>b { font:600 15px var(--mono); }
+.premium-lab-card input[type=range] { width:100%; accent-color:var(--gold); }
+@media(max-width:820px) { .premium-lab-inputs { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media(max-width:620px) { .premium-lab-card { padding:15px; } .premium-shadow { grid-template-columns:1fr; } .premium-shadow>div:last-child { align-items:start; } }
