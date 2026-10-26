@@ -2,6 +2,7 @@ import React,{useEffect,useMemo,useState} from "react";
 import { supabase } from "../lib/supabase";
 import { useApp,fmt } from "../store";
 import { useUI } from "../uiState";
+import { MetricCard } from "../components/DashboardPrimitives";
 import { summarizeAccount,portfolioTotals, type OwnedAccount,type LiveRow,type StateRow } from "../premium/portfolioRisk";
 const show=(n:number|null) => n==null?"Sin confirmar":"$"+fmt(n);
 export default function PortfolioCockpit(){
@@ -44,11 +45,14 @@ export default function PortfolioCockpit(){
      <button className="btn sm" onClick={()=>setVersion(x=>x+1)} disabled={loading}>{loading?"Cargando…":"Sincronizar"}</button>
    </div>
    {error&&<div className="premium-warn">{error}</div>}
-   <div className="portfolio-metrics">
-     <div><span>Cuentas vinculadas</span><b>{all.accounts}</b><small>{all.connected} con puente reciente</small></div>
-     <div><span>Equity consolidada · USD</span><b>{show(all.equityUsd)}</b><small>{all.excluded?all.excluded+" cuenta(s) excluidas por divisa":"Sólo cuentas USD confirmadas"}</small></div>
-     <div><span>Margen diario hasta guardas*</span><b>{show(all.dailyBufferUsd)}</b><small>Agregado de cuentas USD</small></div>
-     <div><span>Exposición restante estimada*</span><b>{show(all.estimatedAvailableUsd)}</b><small>{all.unprotected?"Hay "+all.unprotected+" posición(es) sin riesgo acotado":"Incluye exposición a SL calculable"}</small></div>
+   <div className="institutional-metric-grid">
+     <MetricCard label="Cuentas vinculadas" value={all.accounts} detail={all.connected+" conectadas recientemente"} evidence="direct"/>
+     <MetricCard label="Equity consolidada · USD" value={show(all.equityUsd)} evidence={all.excluded?"estimated":"direct"}
+       detail={all.excluded?all.excluded+" cuenta(s) fuera de la suma USD":"Sólo cuentas en USD"}/>
+     <MetricCard label="Margen diario*" value={show(all.dailyBufferUsd)} evidence="estimated" detail="Hasta los límites configurados"/>
+     <MetricCard label="Riesgo adicional estimado*" value={show(all.estimatedAvailableUsd)}
+       tone={all.unprotected||all.estimatedAvailableUsd===null?"caution":"neutral"}
+       evidence="estimated" detail={all.unprotected?all.unprotected+" posición(es) sin SL válido":"No incluye gaps ni slippage"}/>
    </div>
    <section className="portfolio-list">
      <div className="portfolio-list-title"><h2>Cuentas vinculadas</h2><span>{rows.length} cuenta(s)</span></div>
