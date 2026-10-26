@@ -67,7 +67,7 @@ export default function Journal() {
 
   return (
     <div className="stack">
-      <PageHead title="Diario">
+      <PageHead title="Diario de operaciones" sub="Historial, evaluaciones y notas para mejorar tus decisiones.">
         <Seg value={src} options={[["todas", "Todas"], ["manual", "Manuales"], ["estrategia", "Portafolio"]]} onChange={setSrc} />
         <button className={`btn sm ${ext ? "on" : ""}`} onClick={() => setExt(!ext)}>Evaluar otra operación</button>
       </PageHead>

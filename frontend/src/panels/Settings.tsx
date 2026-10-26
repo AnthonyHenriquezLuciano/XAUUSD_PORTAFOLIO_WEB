@@ -46,7 +46,7 @@ function SimSettings() {
   };
   return (
     <div className="stack">
-      <PageHead title="Ajustes" />
+      <PageHead title="Configuración" sub="Preferencias, parámetros y protecciones de tu espacio de trabajo." />
       <SubNav value={tab} onChange={setTab} items={[["riesgo", "Riesgo y fondeo"], ["grafico", "Gráfico"], ["modelos", "Modelos"]]} />
       {tab === "riesgo" ? (
         <div className="cols-2">

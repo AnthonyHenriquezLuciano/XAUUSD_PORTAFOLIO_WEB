@@ -27,7 +27,7 @@ export default function FlowStudio() {
   const distance = (price: number) => d?.price == null ? "—" : (price - d.price >= 0 ? "+" : "") + fmt(price - d.price) + " $";
   return <div className="flow-studio stack">
     <header className="flow-title">
-      <div><span className="premium-eyebrow">INSTITUTIONAL FLOW</span><h2>Session Intelligence</h2></div>
+      <div><span className="premium-eyebrow">DATOS DE MERCADO / MICROESTRUCTURA</span><h2>Flujo y liquidez</h2></div>
       <span className="flow-proxy-badge">TICK VOLUME</span>
     </header>
     <div className="flow-segment" role="group" aria-label="Modos de análisis">
@@ -62,7 +62,7 @@ export default function FlowStudio() {
     </div>}
     {!d?.ok && <div className="flow-info">{d?.evidence?.[0] || (canWork ? "Calculando perfil de sesión…" : "Sin datos de flujo.")}</div>}
     {d && p && showVolume && <section className="flow-section">
-      <span className="flow-section-caption">VOLUME PROFILE · 70% VALUE AREA</span>
+      <span className="flow-section-caption">PERFIL DE ACTIVIDAD · ÁREA DE VALOR 70%</span>
       <div className="flow-price-head"><span>POC</span><strong>{fmt(p.poc)}</strong><small>{distance(p.poc)}</small></div>
       <div className="flow-price-grid">
         <div><span>VAH</span><b>{fmt(p.vah)}</b></div>
@@ -89,7 +89,7 @@ export default function FlowStudio() {
       {!top.length && <p className="premium-note">Sin niveles confiables para esta muestra.</p>}
     </section>}
     {d && showLevels && <section className="flow-section">
-      <span className="flow-section-caption">BARRIDOS RECHAZADOS · LIQUIDEZ ESTRUCTURAL</span>
+      <span className="flow-section-caption">BARRIDOS Y RECHAZOS DE PRECIO</span>
       {(d.sweeps||[]).slice(-5).reverse().map((x,i)=><div key={x.time+"-"+i} className="flow-gap">
         <span className={x.side==="high"?"sell":"buy"}>{x.side==="high"?"Barrido máximo":"Barrido mínimo"}</span>
         <b>{fmt(x.level)}</b><small>{fmt(x.rejection)} USD</small></div>)}
@@ -97,7 +97,7 @@ export default function FlowStudio() {
       <p className="premium-note">Una mecha con recuperación del nivel es una estructura de precio, no evidencia de órdenes institucionales.</p>
     </section>}
     {d && showGaps && <section className="flow-section">
-      <span className="flow-section-caption">INEFICIENCIAS · FAIR VALUE GAPS M5</span>
+      <span className="flow-section-caption">INEFICIENCIAS · FVG EN M5</span>
       {gaps.map(x=><div className="flow-gap" key={x.id}>
         <span className={x.side===1?"buy":"sell"}>{x.side===1?"▲ Alcista":"▼ Bajista"}</span>
         <b>{fmt(x.lo)} – {fmt(x.hi)}</b><small>{x.state==="partial"?"Parcial":"Sin mitigar"}</small>

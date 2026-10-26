@@ -42,8 +42,8 @@ export default function RealSessions() {
   return <div className="premium-center sessions-page">
     <div className="premium-hero">
       <div>
-        <div className="premium-eyebrow">XAU PORTFOLIO · MARKET SESSIONS</div>
-        <h1>Sesiones reales</h1>
+        <div className="premium-eyebrow">CALENDARIO DE MERCADO / SESIONES</div>
+        <h1>Sesiones del mercado</h1>
         <p>Los horarios de los centros financieros, separados de las ventanas del EA.</p>
       </div>
       <div className="premium-actions">
