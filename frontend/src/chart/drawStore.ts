@@ -12,7 +12,9 @@ function readLocal(k: DrawKey): Drawing[] {
 function writeLocal(k: DrawKey, list: Drawing[]) {
   try { localStorage.setItem(LS(k), JSON.stringify(list)); } catch { /* sin almacenamiento */ }
 }
-const toRow = (k: DrawKey, d: Drawing) => ({ id: d.id, account_id: k.account, kind: d.kind, data: { a: d.a, b: d.b, text: d.text, color: d.color, width: d.width, dash: !!d.dash }, updated_at: new Date().toISOString() });
+// The installed schema validates drawing.kind against a legacy set. Persist a profile as
+// an allowed rectangle with subtype in data; loading already spreads data over row.kind.
+const toRow = (k: DrawKey, d: Drawing) => ({ id: d.id, account_id: k.account, kind: d.kind === "profile" ? "rect" : d.kind, data: { kind: d.kind, a: d.a, b: d.b, text: d.text, color: d.color, width: d.width, dash: !!d.dash }, updated_at: new Date().toISOString() });
 
 export async function loadDrawings(k: DrawKey): Promise<Drawing[]> {
   if (!k.cloud) return readLocal(k);
