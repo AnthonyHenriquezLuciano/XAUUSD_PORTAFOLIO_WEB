@@ -18,7 +18,7 @@ export default function FlowStudio() {
   const d = s.flow;
   const p = d?.profile;
   const pressure = d?.pressure;
-  const reachable = new Map((d?.reach||[]).map(x=>[x.key,x]));
+  const reachable = new Map<string, import("../flow/reach").ReachEvidence>((d?.reach||[]).map(x=>[x.key,x]));
   const f = ui.flow;
   const showVolume = f.focus === "all" || f.focus === "volume";
   const showGaps = f.focus === "all" || f.focus === "inefficiency";
