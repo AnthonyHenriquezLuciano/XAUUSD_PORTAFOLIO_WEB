@@ -1,5 +1,4 @@
--- 006: calendario económico. La función news-sync lo descarga cada hora (pg_cron + pg_net) y bridge_sync
--- se lo entrega al EA solo cuando cambia (para el filtro de noticias).
+-- 006a: calendario económico (tabla news) y bridge_sync entrega las noticias al EA solo cuando cambian.
 create table if not exists public.news (
   id text primary key,
   ts bigint not null,                -- hora del evento en UTC (epoch s)
@@ -11,7 +10,6 @@ create table if not exists public.news (
 );
 create index if not exists news_ts_idx on public.news (ts);
 alter table public.news enable row level security;
-drop policy if exists "ver calendario" on public.news;
 create policy "ver calendario" on public.news for select to authenticated using (true);
 revoke all on public.news from anon;
 revoke insert, update, delete on public.news from authenticated;
@@ -162,12 +160,3 @@ end $$;
 revoke all on function public.bridge_sync(text, jsonb) from public, authenticated;
 grant execute on function public.bridge_sync(text, jsonb) to anon;
 
-create extension if not exists pg_net;
-create extension if not exists pg_cron;
-select cron.unschedule(jobid) from cron.job where jobname = 'news-sync';
-select cron.schedule('news-sync', '7 * * * *', $cron$
-  select net.http_post(
-    url := 'https://neqfafcelxgcxroicmer.supabase.co/functions/v1/news-sync',
-    headers := jsonb_build_object('Content-Type', 'application/json', 'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5lcWZhZmNlbHhnY3hyb2ljbWVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI4NzQzMTksImV4cCI6MjEwODQ1MDMxOX0.vXL1CxSMtno5ynotmSramelv7hXEaN0oQ8NmGC9eWZo'),
-    body := '{}'::jsonb)
-$cron$);
