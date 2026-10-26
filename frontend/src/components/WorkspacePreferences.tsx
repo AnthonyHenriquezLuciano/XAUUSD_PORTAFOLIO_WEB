@@ -54,8 +54,16 @@ const KEYS:[string,string][]=[
 export function ShortcutHelp({open,onClose}:{open:boolean;onClose:()=>void}){
  const closeRef=React.useRef<HTMLButtonElement>(null);
  useEffect(()=>{
-   if(open)closeRef.current?.focus();
- },[open]);
+   if(!open)return;
+   const previous=document.activeElement instanceof HTMLElement?document.activeElement:null;
+   closeRef.current?.focus();
+   const trap=(e:KeyboardEvent)=>{
+     if(e.key==="Tab"){e.preventDefault();closeRef.current?.focus();}
+     if(e.key==="Escape")onClose();
+   };
+   window.addEventListener("keydown",trap);
+   return ()=>{window.removeEventListener("keydown",trap);previous?.focus();};
+ },[open,onClose]);
  if(!open)return null;
  return <div className="shortcut-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)onClose();}}>
    <section role="dialog" aria-modal="true" aria-labelledby="shortcut-title" className="shortcut-dialog">
