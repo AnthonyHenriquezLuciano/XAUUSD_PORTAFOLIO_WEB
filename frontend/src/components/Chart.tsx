@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createChart, CrosshairMode, IChartApi, IPriceLine, ISeriesApi, LineStyle, UTCTimestamp } from "lightweight-charts";
 import { ChartOverlay } from "../chart/overlay";
+import DrawingTools from "./DrawingTools";
 import { alpha, themeById } from "../chart/themes";
 import { api } from "../api";
 import { fmt, useApp } from "../store";
@@ -22,6 +23,9 @@ export default function Chart() {
   const fcRef = useRef<ISeriesApi<"Line">[]>([]);
   const overlayRef = useRef<ChartOverlay | null>(null);
   const timesRef = useRef<number[]>([]);
+  const barsRef = useRef<{ time: number; open: number; high: number; low: number; close: number }[]>([]);
+  const [ready, setReady] = useState(false);
+  const [drawOpen, setDrawOpen] = useState<boolean>(() => { try { return localStorage.getItem("xauai.drawopen") === "1"; } catch { return false; } });
   const linesRef = useRef<Map<string, { line: IPriceLine; def: LineDef }>>(new Map());
   const lastRef = useRef<{ time: number; open: number; high: number; low: number; close: number } | null>(null);
   const dragRef = useRef<{ id: string; def: LineDef } | null>(null);
@@ -73,7 +77,8 @@ export default function Chart() {
     });
     const mk = (color: string, style: LineStyle, width: 1 | 2) => chart.addLineSeries({ color, lineStyle: style, lineWidth: width, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
     fcRef.current = [mk("rgba(224,176,79,.7)", LineStyle.Solid, 1), mk("rgba(243,205,122,.95)", LineStyle.Dashed, 2), mk("rgba(224,176,79,.7)", LineStyle.Solid, 1)];
-    return () => { chart.remove(); chartRef.current = null; candleRef.current = null; linesRef.current.clear(); };
+    setReady(true);
+    return () => { setReady(false); chart.remove(); chartRef.current = null; candleRef.current = null; linesRef.current.clear(); };
   }, []);
 
   // ------------------------------------------------------------------ datos
@@ -86,6 +91,7 @@ export default function Chart() {
       const bars = d.bars.map((b: any) => ({ ...b, time: b.time as UTCTimestamp }));
       candleRef.current.setData(bars);
       timesRef.current = bars.map((b: any) => Number(b.time));
+      barsRef.current = bars;
       lastRef.current = bars.length ? { ...bars[bars.length - 1] } : null;
       chartRef.current?.timeScale().scrollToRealTime();
     }).catch((e) => toast(e.message, "error"));
@@ -103,6 +109,7 @@ export default function Chart() {
     if (bucket > last.time) {
       lastRef.current = { time: bucket, open: t.bid, high: t.bid, low: t.bid, close: t.bid };
       timesRef.current = [...timesRef.current, bucket];
+      barsRef.current = [...barsRef.current, lastRef.current];
       // al cerrar una vela se recargan las velas cerradas (con el simulador acelerado pueden cerrarse varias a la vez)
       if (!reloadRef.current) {
         reloadRef.current = true;
@@ -112,6 +119,7 @@ export default function Chart() {
           if (cur && bars.length && bars[bars.length - 1].time < cur.time) bars.push({ ...cur, time: cur.time as UTCTimestamp });
           candleRef.current?.setData(bars);
           timesRef.current = bars.map((b: any) => Number(b.time));
+          barsRef.current = bars;
         }).catch(() => {}).finally(() => { reloadRef.current = false; });
       }
     } else if (bucket === last.time) {
@@ -345,6 +353,8 @@ export default function Chart() {
             </div>
           ) : null}
         </div>
+        <button className={`btn sm ${drawOpen ? "primary" : ""}`} title="Herramientas de dibujo" aria-pressed={drawOpen}
+          onClick={() => { const v = !drawOpen; setDrawOpen(v); try { localStorage.setItem("xauai.drawopen", v ? "1" : "0"); } catch { /* sin almacenamiento */ } }}>✎ Dibujo</button>
         <div className="spacer" />
         <button className={`btn sm ${ui.showForecast ? "primary" : ""}`} onClick={() => ui.setShowForecast(!ui.showForecast)} disabled={!fc}>
           {ui.showForecast ? "Ocultar predicción" : "Predecir próximas horas"}
@@ -353,7 +363,9 @@ export default function Chart() {
       </div>
       <div className="chart">
         <div ref={el} style={{ position: "absolute", inset: 0 }} />
-        <div className="chart-legend">
+        <DrawingTools ready={ready && connected} open={drawOpen && connected} box={el} chartRef={chartRef} candleRef={candleRef} timesRef={timesRef} barsRef={barsRef}
+          tf={TF_SEC[tf]} theme={th} drawKey={!connected ? null : s.broker === "cloud" && s.accountInfo?.id ? { cloud: true, account: s.accountInfo.id } : s.broker === "sim" || s.sim ? { cloud: false, account: "sim" } : null} />
+        <div className={`chart-legend ${drawOpen && connected ? "shift" : ""}`}>
           {s.tick || hover ? (
             <div className="ohlc mono" style={{ color: th.text }}>
               <span style={{ color: th.light ? "#1f2633" : "#e6e9ef", fontWeight: 700 }}>{s.settings?.symbol || "XAUUSD"}</span>

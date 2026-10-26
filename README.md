@@ -12,6 +12,9 @@ Web para operar oro (XAUUSD) en MetaTrader 5 desde el navegador (PC o móvil), c
 - **Diario evaluado**: cada operación cerrada recibe una nota (0–100) y un veredicto: «buena entrada» o «debiste esperar».
 - **Filtro de noticias**: calendario económico (USD) que el servidor descarga cada hora. El EA no abre operaciones dentro de la ventana de cada noticia de alto impacto (o también medio) y, si quieres, cierra antes las posiciones recientes. Las noticias se ven en Señales y como líneas en el gráfico.
 - **Gestión automática de posiciones**: break-even, trailing stop y cierre parcial, en múltiplos del SL inicial (R). Se configura en Ajustes y lo ejecuta el EA, aunque la web esté cerrada. No toca operaciones de otros EA.
+- **Protector de disciplina**: el EA para el día tras N pérdidas seguidas, un máximo de operaciones, un objetivo o una pérdida diaria tuya; hace una pausa tras cada pérdida y bloquea las horas que elijas. Se aplica a las operaciones manuales o a todas, y si quieres cierra al instante lo que abras a mano en MT5 durante un bloqueo.
+- **Herramientas de dibujo**: líneas horizontales, rayos, tendencias, líneas verticales, rectángulos, Fibonacci, texto y medición, con imán a las velas. Se seleccionan, se mueven, se cambian de color y grosor y se borran con Supr. Se guardan en tu cuenta (los ves en cualquier dispositivo y en cualquier temporalidad).
+- **Copiador entre cuentas**: una cuenta repite las operaciones de otra (aperturas, cambios de SL/TP, cierres parciales y cierres), con lote según balance, multiplicador, lote fijo o riesgo %. Lo coordina el servidor y lo ejecuta el EA de la cuenta que copia, con sus propias guardas.
 - **Estadísticas y reglas de fondeo**: calendario de resultados por día, curva, acierto, factor de beneficio, R medio, rachas y desgloses por estrategia, hora, día y lado. Además, el progreso del objetivo, el DD diario y máximo, los días operados y la regla de consistencia.
 - **Backtest** del portafolio con las velas reales de tu bróker. Permite probar otros parámetros, una estrategia nueva o el efecto de la gestión automática.
 - **Cuentas compartidas**: invitas a quien quieras por correo, con acceso de «solo ver» o «puede operar».
@@ -34,6 +37,7 @@ Las piezas:
 - **Supabase**, proyecto `neqfafcelxgcxroicmer`:
   - Postgres con reglas RLS: cada persona ve solo sus cuentas y las compartidas con ella.
   - Tiempo real para precio, estado, órdenes y diario.
+  - Copiador: en cada sincronización del EA de la cuenta que copia, `bridge_sync` compara sus copias con las operaciones de la cuenta copiada y le entrega las órdenes que falten. Las copias nunca se vuelven a copiar (no hay bucles) y una orden que falla 3 veces no se repite hasta que cambie algo.
   - Función `news-sync` (cada hora, con pg_cron): descarga el calendario económico de la semana y la siguiente a la tabla `news`. El EA recibe las noticias USD solo cuando cambian.
 - **Web** (`frontend/`): React + TradingView Lightweight Charts. La IA (árboles exportados del modelo entrenado, tablas del cono y estadísticas por escenario) va en `public/ai/models.json`.
 
@@ -74,7 +78,7 @@ En [supabase.com](https://supabase.com) → tu proyecto (ref. `neqfafcelxgcxroic
 3. En segundos la cuenta aparece como «EA conectado». El EA sube hasta 180 días de velas M1, lo que tarda unos minutos.
 4. Cuando lo hayas revisado, activa **Automático ON** en la barra superior.
 
-> **Actualizar el EA:** cuando haya una versión nueva (ahora la 6.10), sustituye el `.mq5` en `MQL5/Experts`, compílalo (F7) y vuelve a ponerlo en el gráfico con las mismas entradas. Los ajustes de la web se conservan.
+> **Actualizar el EA:** cuando haya una versión nueva (ahora la 6.20), sustituye el `.mq5` en `MQL5/Experts`, compílalo (F7) y vuelve a ponerlo en el gráfico con las mismas entradas. Los ajustes de la web se conservan.
 
 > **Importante:** no pongas el EA v5 y el v6 a la vez en la misma cuenta. Usan los mismos magic numbers. El v6 sustituye al v5.
 
@@ -110,17 +114,19 @@ Lo que se ha comprobado:
   - La ventana de 15 días más la tabla diaria da las mismas variables que el histórico completo.
 - **Backtest en el navegador**: coincide **operación a operación** con el de Python. Sobre 5 meses de M1 da 359/359 operaciones idénticas sin reglas de fondeo y 151/151 con ellas.
 - **Gestión automática en el backtest** (mismos 5 meses, sin reglas de fondeo): sin gestión +30,4 %; break-even a 1R +25,7 %; trailing 1,5R/1R +18,3 %; cierre parcial del 50 % a 1R +19,2 % (con menos DD: 3,4 % frente a 3,9 %). En este periodo la gestión **empeora** el resultado del portafolio: pruébalo con tus datos antes de activarla. El backtest es conservador: en cada vela comprueba primero el SL y el SL nuevo se aplica desde la vela siguiente.
-- **Web completa**: se probó con Playwright contra un Supabase simulado (REST, auth y tiempo real) y un EA simulado, en escritorio y móvil, con la CSP de producción. Pasaron los 20 pasos, sin errores de consola:
+- **Web completa**: se probó con Playwright contra un Supabase simulado (REST, auth y tiempo real) y un EA simulado, en escritorio y móvil, con la CSP de producción. Pasaron los 23 pasos, sin errores de consola:
   - entrar, abrir la cuenta, señales y predicción;
   - preparar la orden con probabilidades, enviarla, BE y arrastrar el TP;
   - diario evaluado, ajustes, temas del gráfico, Automático ON;
   - calendario de noticias, filtro de noticias y gestión automática guardados para el EA;
-  - estadísticas y reglas de fondeo, backtest con y sin gestión.
+  - estadísticas y reglas de fondeo, backtest con y sin gestión;
+  - dibujos (crear, mover, cambiar color, borrar, cambiar de temporalidad), protector de disciplina con bloqueo y copiador.
+- **Copiador**: 21 comprobaciones con un Postgres local (`supabase/tests/copier_test.mjs`): apertura con el lote correcto, SL/TP a la misma distancia, break-even, cierre parcial proporcional, cierre, reintentos limitados, operaciones antiguas o sin SL, permisos y bucles.
 - **Calendario de noticias**: la función `news-sync` se ejecutó en el proyecto real y guardó 96 eventos.
 
 Lo que no se ha podido probar:
 
-- **El EA (v6.10) no se ha compilado**: aquí no hay MetaEditor. Se revisó a mano, con comprobación automática de llaves, variables declaradas y funciones duplicadas. Si MetaEditor da un error, pásame el texto exacto.
+- **El EA (v6.20) no se ha compilado**: aquí no hay MetaEditor. Se revisó a mano, con comprobación automática de llaves, variables declaradas y funciones duplicadas. Si MetaEditor da un error, pásame el texto exacto.
 - **No se ha probado contra un MT5 real**. Empieza en una **cuenta demo**, mira la pestaña Expertos de MT5 y el registro de la web.
 
 ## Qué esperar de la IA (medido fuera de muestra)

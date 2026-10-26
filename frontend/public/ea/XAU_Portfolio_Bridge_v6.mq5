@@ -19,7 +19,7 @@
 //|  automática de posiciones (break-even, trailing, cierre parcial).  |
 //+------------------------------------------------------------------+
 #property copyright   "Anthony Henriquez"
-#property version     "6.10"
+#property version     "6.20"
 #property description "Portafolio XAUUSD (R50, TOK, AORB, ALB, LM) con guardas FundingPips y puente con la web XAU Portfolio AI: la web muestra la cuenta y envía órdenes; el portafolio opera aquí."
 
 #include <Trade/Trade.mqh>
@@ -197,6 +197,27 @@ bool     g_ptOn = false;                      // cierre parcial de g_ptPct % a +
 double   g_ptR = 1.0;
 double   g_ptPct = 50.0;
 string   g_gvKey = "";
+
+// copiador: las copias de otra cuenta llevan su propio magic (InpMagic + 9) y las gestiona la cuenta copiada
+long     g_magicCopy = 0;
+
+// protector de disciplina
+bool     g_dpOn = false;
+string   g_dpScope = "manuales";              // manuales | todas
+int      g_dpMaxLoss = 0;                     // parar el día tras N pérdidas seguidas (0 = no)
+int      g_dpMaxTrades = 0;                   // máximo de operaciones al día (0 = no)
+double   g_dpProfitPct = 0.0;                 // parar el día al ganar x% (0 = no)
+double   g_dpLossPct = 0.0;                   // parar el día al perder x% (0 = no)
+int      g_dpCooldown = 0;                    // minutos sin operar tras una pérdida (0 = no)
+string   g_dpWindows = "";                    // horas bloqueadas (servidor) "HH:MM-HH:MM,HH:MM-HH:MM"
+bool     g_dpCloseMt5 = false;                // cerrar al instante lo que se abra a mano en MT5 durante un bloqueo
+int      g_dpLosses = 0, g_dpTrades = 0;      // hoy: pérdidas seguidas y operaciones abiertas (en el ámbito)
+datetime g_dpLastLoss = 0;
+string   g_dpWhy = "";                        // motivo del bloqueo actual ("" = sin bloqueo)
+datetime g_dpUntil = 0, g_dpSince = 0;
+datetime g_dpLockDay = 0;                     // bloqueo fijo hasta el final de este día del servidor
+string   g_dpLockWhy = "";
+bool     g_settingsApplied = false;           // ya se aplicaron una vez los ajustes de la web desde el arranque
 
 
 //==================================================================
@@ -507,6 +528,7 @@ string StratName(const long magic)
    if(magic == g_magicR5)  return "R50";
    if(magic == g_al.magic) return "ALB";
    if(magic == InpMagic)   return "MANUAL";
+   if(magic == g_magicCopy && g_magicCopy > 0) return "COPIA";
    if(magic == 0)          return "MT5";
    return "EA " + IntegerToString(magic);
   }
@@ -514,6 +536,7 @@ string StratName(const long magic)
 string SourceOf(const long magic)
   {
    if(IsOurMagic(magic)) return "estrategia";
+   if(magic == g_magicCopy && g_magicCopy > 0) return "copia";
    if(magic == InpMagic || magic == 0) return "manual";
    return "otro EA";
   }
@@ -802,7 +825,9 @@ string StateJson()
 
    int nk = g_newsEnabled ? NewsWindow(g_newsBefore, g_newsAfter) : -1;
    string nws = (nk < 0) ? "null" : "{\"title\":" + JS(g_newsTitle[nk]) + ",\"t\":" + JI(g_newsT[nk]) + ",\"until\":" + JI(g_newsT[nk] + g_newsAfter * 60) + "}";
-   string market = "{\"open\":" + JB(live) + ",\"last_tick\":" + (hasTick ? JI((long)tk.time) : "null") + ",\"news\":" + nws + "}";
+   string dp = !g_dpOn ? "null" : "{\"why\":" + (g_dpWhy == "" ? "null" : JS(g_dpWhy)) + ",\"until\":" + (g_dpWhy == "" ? "null" : JI((long)g_dpUntil)) +
+               ",\"losses\":" + IntegerToString(g_dpLosses) + ",\"trades\":" + IntegerToString(g_dpTrades) + ",\"scope\":" + JS(g_dpScope) + "}";
+   string market = "{\"open\":" + JB(live) + ",\"last_tick\":" + (hasTick ? JI((long)tk.time) : "null") + ",\"news\":" + nws + ",\"discipline\":" + dp + "}";
 
    string settings = "{\"autotrade\":" + JB(g_autotrade) + ",\"risk_pct\":" + JD(g_riskPct, 2) +
                      ",\"max_open_trades\":" + IntegerToString(g_maxOpen) + ",\"use_time_exit\":" + JB(g_useTimeExit) +
@@ -817,8 +842,11 @@ string StateJson()
                      ",\"news_events\":" + IntegerToString(ArraySize(g_newsT)) +
                      ",\"mg_scope\":" + JS(g_mgScope) + ",\"be_enabled\":" + JB(g_beOn) + ",\"be_r\":" + JD(g_beR, 2) + ",\"be_offset\":" + JD(g_beOff, 2) +
                      ",\"tr_enabled\":" + JB(g_trOn) + ",\"tr_start_r\":" + JD(g_trStartR, 2) + ",\"tr_dist_r\":" + JD(g_trDistR, 2) +
-                     ",\"pt_enabled\":" + JB(g_ptOn) + ",\"pt_r\":" + JD(g_ptR, 2) + ",\"pt_pct\":" + JD(g_ptPct, 0) + "}";
-   string ea = "{\"version\":\"6.10\",\"symbol\":" + JS(_Symbol) + ",\"magic\":" + JI(InpMagic) + ",\"digits\":" + IntegerToString(_Digits) +
+                     ",\"pt_enabled\":" + JB(g_ptOn) + ",\"pt_r\":" + JD(g_ptR, 2) + ",\"pt_pct\":" + JD(g_ptPct, 0) +
+                     ",\"dp_enabled\":" + JB(g_dpOn) + ",\"dp_scope\":" + JS(g_dpScope) + ",\"dp_max_losses\":" + IntegerToString(g_dpMaxLoss) +
+                     ",\"dp_max_trades\":" + IntegerToString(g_dpMaxTrades) + ",\"dp_profit_pct\":" + JD(g_dpProfitPct, 2) + ",\"dp_loss_pct\":" + JD(g_dpLossPct, 2) +
+                     ",\"dp_cooldown_min\":" + IntegerToString(g_dpCooldown) + ",\"dp_windows\":" + JS(g_dpWindows) + ",\"dp_close_mt5\":" + JB(g_dpCloseMt5) + "}";
+   string ea = "{\"version\":\"6.20\",\"symbol\":" + JS(_Symbol) + ",\"magic\":" + JI(InpMagic) + ",\"digits\":" + IntegerToString(_Digits) +
                ",\"contract\":" + JD(SymbolInfoDouble(_Symbol, SYMBOL_TRADE_CONTRACT_SIZE), 2) +
                ",\"vol_min\":" + JD(SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN), 2) +
                ",\"vol_step\":" + JD(SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_STEP), 2) +
@@ -838,16 +866,24 @@ string CmdOpen(JNode *pl, ulong &ticketOut, double &priceOut, double &lotsOut)
    double lots = JNum(pl, "lots", 0.0), riskPct = JNum(pl, "risk_pct", 0.0);
    string cmt = JStr(pl, "comment", "web");
    if(StringLen(cmt) > 25) cmt = StringSubstr(cmt, 0, 25);
+   bool isCopy = JBool(pl, "copy", false);
+   double slDist = JNum(pl, "sl_dist", 0.0), tpDist = JNum(pl, "tp_dist", 0.0), maxLots = JNum(pl, "max_lots", 0.0);
    if(side != 1 && side != -1) return "lado no válido";
-   if(sl <= 0) return "falta el stop loss";
+   if(sl <= 0 && slDist <= 0) return "falta el stop loss";
    if(g_permBlocked || g_targetHit || g_dailyBlocked) return "cuenta bloqueada por las guardas de fondeo";
    string nwhy;
    if(NewsBlocked(nwhy)) return "bloqueado por " + nwhy + " (filtro de noticias activo en Ajustes)";
+   DisciplineUpdate(true);
+   string dwhy;
+   if(DpBlocked(!isCopy, dwhy)) return "protector de disciplina: " + dwhy;
    if(InpNoHedge && OppositeOpen(side)) return "hay una posición contraria abierta (FundingPips no permite cobertura)";
    MqlTick tk;
    if(!SymbolInfoTick(_Symbol, tk)) return "sin precio";
    double entry = (kind == "market") ? ((side > 0) ? tk.ask : tk.bid) : price;
    if(entry <= 0) return "precio de entrada no válido";
+   if(slDist > 0) sl = entry - side * slDist;               // copias: misma distancia que la operación copiada
+   if(tpDist > 0) tp = entry + side * tpDist;
+   else if(slDist > 0) tp = 0.0;
    if((side > 0 && sl >= entry) || (side < 0 && sl <= entry)) return "el SL está del lado equivocado";
    if(tp > 0 && ((side > 0 && tp <= entry) || (side < 0 && tp >= entry))) return "el TP está del lado equivocado";
    sl = NormPrice(sl);
@@ -875,9 +911,10 @@ string CmdOpen(JNode *pl, ulong &ticketOut, double &priceOut, double &lotsOut)
       if(lots > 0 && lots * lpl > room * 0.9)
          return StringFormat("con %.2f lotes el SL pasaría las guardas de fondeo (pérdida %.2f, margen %.2f)", lots, lots * lpl, room * 0.9);
      }
+   if(maxLots > 0 && lots > maxLots) lots = NormLots(maxLots);
    if(lots <= 0) return "volumen no válido";
 
-   trade.SetExpertMagicNumber((ulong)InpMagic);
+   trade.SetExpertMagicNumber((ulong)(isCopy ? g_magicCopy : InpMagic));
    bool ok = false;
    if(kind == "market")
       ok = (side > 0) ? trade.Buy(lots, _Symbol, 0.0, sl, tp, cmt) : trade.Sell(lots, _Symbol, 0.0, sl, tp, cmt);
@@ -1103,7 +1140,32 @@ void ApplySettings(JNode *s)
    SetB(s, "pt_enabled", g_ptOn, " cierre parcial", changes);
    SetD(s, "pt_r", g_ptR, 0.2, 20.0, " parcial a R", changes);
    SetD(s, "pt_pct", g_ptPct, 5.0, 95.0, " parcial %", changes);
+   // protector de disciplina
+   string dpBefore = changes;
+   SetB(s, "dp_enabled", g_dpOn, " protector de disciplina", changes);
+   if(JHas(s, "dp_scope"))
+     {
+      string v = JStr(s, "dp_scope", g_dpScope);
+      if((v == "manuales" || v == "todas") && v != g_dpScope) { g_dpScope = v; changes += " disciplina: " + v; }
+     }
+   SetI(s, "dp_max_losses", g_dpMaxLoss, 0, 20, " pérdidas seguidas máx.", changes);
+   SetI(s, "dp_max_trades", g_dpMaxTrades, 0, 50, " operaciones/día máx.", changes);
+   SetD(s, "dp_profit_pct", g_dpProfitPct, 0.0, 20.0, " objetivo diario %", changes);
+   SetD(s, "dp_loss_pct", g_dpLossPct, 0.0, 10.0, " pérdida diaria máx. %", changes);
+   SetI(s, "dp_cooldown_min", g_dpCooldown, 0, 600, " pausa tras pérdida (min)", changes);
+   if(JHas(s, "dp_windows"))
+     {
+      string v = JStr(s, "dp_windows", g_dpWindows);
+      if(v != g_dpWindows && WindowsValid(v)) { g_dpWindows = v; changes += " horas bloqueadas: " + (v == "" ? "ninguna" : v); }
+     }
+   SetB(s, "dp_close_mt5", g_dpCloseMt5, " cerrar operaciones de MT5 en bloqueo", changes);
+   if(changes != dpBefore && g_settingsApplied)   // reglas cambiadas desde la web: se vuelve a evaluar el día con ellas
+     {
+      g_dpLockDay = 0; g_dpLockWhy = ""; GlobalVariableDel(g_gvKey + "DPL");
+      DisciplineUpdate(true);
+     }
    if(changes != "") Log("Ajustes desde la web:" + changes, g_autotrade ? "warn" : "info");
+   g_settingsApplied = true;
   }
 
 void SetB(JNode *s, const string k, bool &var, const string label, string &changes)
@@ -1172,7 +1234,7 @@ void NewsCloseCheck()
          ulong tk = PositionGetTicket(p);
          if(tk == 0 || PositionGetString(POSITION_SYMBOL) != _Symbol) continue;
          long mg = PositionGetInteger(POSITION_MAGIC);
-         if(!IsOurMagic(mg) && mg != InpMagic) continue;
+         if(!IsOurMagic(mg) && mg != InpMagic && !(mg == g_magicCopy && g_magicCopy > 0)) continue;
          long openUtc = (long)PositionGetInteger(POSITION_TIME) - off;
          if(openUtc <= t - 5 * 3600) continue;
          if(trade.PositionClose(tk, InpSlippagePts)) n++; else fails++;
@@ -1180,6 +1242,196 @@ void NewsCloseCheck()
       if(n > 0) Log(StringFormat("Noticia «%s»: %d posiciones cerradas antes del evento", g_newsTitle[i], n), "warn");
       if(fails > 0) { Log(StringFormat("Noticia «%s»: %d cierres fallaron, reintento en 30 s", g_newsTitle[i], fails), "warn"); g_nextClose = TimeCurrent() + 30; }
       return;
+     }
+  }
+
+// ---------------------------------------------------------------- protector de disciplina
+bool DpInScope(const long mg)
+  {
+   if(mg == InpMagic || mg == 0) return true;                       // web y MT5 a mano
+   if(g_dpScope == "todas") return IsOurMagic(mg) || (mg == g_magicCopy && g_magicCopy > 0);
+   return false;
+  }
+
+// "HH:MM-HH:MM" separados por coma o punto y coma; "" = ninguna
+bool WindowsValid(const string w)
+  {
+   if(w == "") return true;
+   string parts[];
+   string t = w;
+   StringReplace(t, ";", ",");
+   int n = StringSplit(t, ',', parts);
+   if(n <= 0 || n > 6) return false;
+   for(int i = 0; i < n; i++)
+     {
+      string ab[];
+      string x = parts[i];
+      StringTrimLeft(x); StringTrimRight(x);
+      if(StringSplit(x, '-', ab) != 2) return false;
+      StringTrimLeft(ab[0]); StringTrimRight(ab[0]); StringTrimLeft(ab[1]); StringTrimRight(ab[1]);
+      if(ParseHM(ab[0]) < 0 || ParseHM(ab[1]) < 0) return false;
+     }
+   return true;
+  }
+
+// Ventana bloqueada que contiene ahora (hora del servidor); until = su final
+bool InBlockedWindow(datetime &until, string &label)
+  {
+   if(g_dpWindows == "") return false;
+   datetime now = TimeCurrent();
+   int mod = (int)(((long)now % 86400) / 60);
+   string parts[];
+   string t = g_dpWindows;
+   StringReplace(t, ";", ",");
+   int n = StringSplit(t, ',', parts);
+   for(int i = 0; i < n; i++)
+     {
+      string ab[];
+      string x = parts[i];
+      StringTrimLeft(x); StringTrimRight(x);
+      if(StringSplit(x, '-', ab) != 2) continue;
+      StringTrimLeft(ab[0]); StringTrimRight(ab[0]); StringTrimLeft(ab[1]); StringTrimRight(ab[1]);
+      int a = ParseHM(ab[0]), b = ParseHM(ab[1]);
+      if(a < 0 || b < 0 || a == b) continue;
+      bool inside = (a < b) ? (mod >= a && mod < b) : (mod >= a || mod < b);   // b < a: cruza la medianoche
+      if(!inside) continue;
+      datetime d0 = DayStart(now);
+      until = d0 + b * 60;
+      if(until <= now) until += 86400;
+      label = x;
+      return true;
+     }
+   return false;
+  }
+
+bool PidOpen(const long pid)
+  {
+   for(int i = PositionsTotal() - 1; i >= 0; i--)
+     {
+      ulong tk = PositionGetTicket(i);
+      if(tk != 0 && PositionGetInteger(POSITION_IDENTIFIER) == pid) return true;
+     }
+   return false;
+  }
+
+// Recalcula las cuentas del día (operaciones y pérdidas seguidas, desde el historial) y el motivo de bloqueo.
+void DisciplineUpdate(const bool force)
+  {
+   static uint lastRun = 0;
+   uint nowMs = GetTickCount();
+   if(!force && lastRun != 0 && nowMs - lastRun < 2000) return;
+   lastRun = nowMs;
+   string prevWhy = g_dpWhy;
+   if(!g_dpOn) { g_dpWhy = ""; g_dpUntil = 0; return; }
+   datetime now = TimeCurrent();
+   datetime d0 = DayStart(now);
+
+   // bloqueo fijo del día guardado (reinicio del EA a mitad de día)
+   string gvL = g_gvKey + "DPL";
+   if(g_dpLockDay != d0)
+     {
+      g_dpLockDay = 0; g_dpLockWhy = "";
+      if(GlobalVariableCheck(gvL) && (datetime)GlobalVariableGet(gvL) == d0) { g_dpLockDay = d0; g_dpLockWhy = "bloqueo del día"; }
+     }
+
+   long pids[]; double pnl[]; long tcl[]; long pmg[]; bool hasMg[];
+   int trades = 0;
+   if(HistorySelect(d0, now + 60))
+     {
+      int n = HistoryDealsTotal();
+      for(int i = 0; i < n; i++)
+        {
+         ulong d = HistoryDealGetTicket(i);
+         if(d == 0 || HistoryDealGetString(d, DEAL_SYMBOL) != _Symbol) continue;
+         long type = HistoryDealGetInteger(d, DEAL_TYPE);
+         if(type != DEAL_TYPE_BUY && type != DEAL_TYPE_SELL) continue;
+         long entry = HistoryDealGetInteger(d, DEAL_ENTRY), mg = HistoryDealGetInteger(d, DEAL_MAGIC);
+         long pid = HistoryDealGetInteger(d, DEAL_POSITION_ID);
+         int k = -1;
+         for(int j = 0; j < ArraySize(pids); j++) if(pids[j] == pid) { k = j; break; }
+         if(k < 0)
+           {
+            k = ArraySize(pids);
+            ArrayResize(pids, k + 1); ArrayResize(pnl, k + 1); ArrayResize(tcl, k + 1); ArrayResize(pmg, k + 1); ArrayResize(hasMg, k + 1);
+            pids[k] = pid; pnl[k] = 0; tcl[k] = 0; pmg[k] = mg; hasMg[k] = false;
+           }
+         pnl[k] += HistoryDealGetDouble(d, DEAL_PROFIT) + HistoryDealGetDouble(d, DEAL_COMMISSION) + HistoryDealGetDouble(d, DEAL_SWAP) + HistoryDealGetDouble(d, DEAL_FEE);
+         if(entry == DEAL_ENTRY_IN)
+           {
+            pmg[k] = mg; hasMg[k] = true;
+            if(DpInScope(mg)) trades++;
+           }
+         else if(entry == DEAL_ENTRY_OUT || entry == DEAL_ENTRY_OUT_BY || entry == DEAL_ENTRY_INOUT)
+            tcl[k] = HistoryDealGetInteger(d, DEAL_TIME);
+        }
+     }
+   // posiciones abiertas antes de hoy: su magic está en el deal de entrada
+   for(int j = 0; j < ArraySize(pids); j++)
+      if(!hasMg[j] && tcl[j] > 0 && HistorySelectByPosition(pids[j]))
+         for(int i = 0; i < HistoryDealsTotal(); i++)
+           {
+            ulong d = HistoryDealGetTicket(i);
+            if(d != 0 && HistoryDealGetInteger(d, DEAL_ENTRY) == DEAL_ENTRY_IN) { pmg[j] = HistoryDealGetInteger(d, DEAL_MAGIC); break; }
+           }
+   // pérdidas seguidas, en orden de cierre, solo posiciones ya cerradas y del ámbito
+   int streak = 0; datetime lastLoss = 0; long lastT = 0;
+   for(int pass = 0; pass < ArraySize(pids); pass++)
+     {
+      int best = -1;
+      for(int j = 0; j < ArraySize(pids); j++)
+         if(tcl[j] > lastT && (best < 0 || tcl[j] < tcl[best])) best = j;
+      if(best < 0) break;
+      lastT = tcl[best];
+      if(!DpInScope(pmg[best]) || PidOpen(pids[best])) continue;
+      if(pnl[best] < 0) { streak++; lastLoss = (datetime)tcl[best]; } else streak = 0;
+     }
+   g_dpLosses = streak; g_dpTrades = trades; g_dpLastLoss = lastLoss;
+
+   double dayPct = (g_dayRef > 0) ? (AccountInfoDouble(ACCOUNT_EQUITY) / g_dayRef - 1.0) * 100.0 : 0.0;
+   string why = ""; datetime until = 0; bool dayLock = false;
+   if(g_dpLockDay == d0 && g_dpLockWhy != "") { why = g_dpLockWhy; dayLock = true; }
+   else if(g_dpMaxLoss > 0 && streak >= g_dpMaxLoss) { why = StringFormat("%d pérdidas seguidas hoy", streak); dayLock = true; }
+   else if(g_dpMaxTrades > 0 && trades >= g_dpMaxTrades) { why = StringFormat("límite de %d operaciones hoy", g_dpMaxTrades); dayLock = true; }
+   else if(g_dpProfitPct > 0 && dayPct >= g_dpProfitPct) { why = StringFormat("objetivo diario +%.1f%% alcanzado", g_dpProfitPct); dayLock = true; }
+   else if(g_dpLossPct > 0 && dayPct <= -g_dpLossPct) { why = StringFormat("pérdida diaria de %.1f%%", g_dpLossPct); dayLock = true; }
+   if(dayLock)
+     {
+      until = d0 + 86400;
+      if(g_dpLockDay != d0) { g_dpLockDay = d0; g_dpLockWhy = why; GlobalVariableSet(gvL, (double)d0); }
+     }
+   else
+     {
+      string lab;
+      datetime wu = 0;
+      if(g_dpCooldown > 0 && lastLoss > 0 && now < lastLoss + g_dpCooldown * 60)
+        { why = StringFormat("pausa de %d min tras una pérdida", g_dpCooldown); until = lastLoss + g_dpCooldown * 60; }
+      else if(InBlockedWindow(wu, lab)) { why = "horario bloqueado " + lab; until = wu; }
+     }
+   g_dpWhy = why; g_dpUntil = until;
+   if(why != "" && prevWhy == "") { g_dpSince = now; Log("Protector de disciplina: " + why + ". No se abren operaciones" + (g_dpScope == "todas" ? "" : " manuales") + StringFormat(" hasta %s.", TimeToString(until, TIME_DATE | TIME_MINUTES)), "warn"); }
+   else if(why == "" && prevWhy != "") Log("Protector de disciplina: fin del bloqueo.");
+  }
+
+// ¿Bloquea el protector esta apertura? isManual = web o MT5 a mano (las copias y el portafolio solo con ámbito «todas»)
+bool DpBlocked(const bool isManual, string &why)
+  {
+   if(!g_dpOn || g_dpWhy == "") return false;
+   if(!isManual && g_dpScope != "todas") return false;
+   why = g_dpWhy + StringFormat(" (hasta %s)", TimeToString(g_dpUntil, TIME_DATE | TIME_MINUTES));
+   return true;
+  }
+
+// Durante un bloqueo, cierra lo que se abra a mano en MT5 (magic 0) después de empezar el bloqueo
+void DpCloseMt5()
+  {
+   if(!g_dpOn || !g_dpCloseMt5 || g_dpWhy == "" || TimeCurrent() < g_nextClose) return;
+   for(int i = PositionsTotal() - 1; i >= 0; i--)
+     {
+      ulong tk = PositionGetTicket(i);
+      if(tk == 0 || PositionGetString(POSITION_SYMBOL) != _Symbol || PositionGetInteger(POSITION_MAGIC) != 0) continue;
+      if((datetime)PositionGetInteger(POSITION_TIME) < g_dpSince) continue;
+      if(trade.PositionClose(tk, InpSlippagePts)) Log(StringFormat("Protector de disciplina: cerrada #%I64u abierta a mano en MT5 durante el bloqueo (%s)", tk, g_dpWhy), "warn");
+      else { Log(StringFormat("Protector de disciplina: no se pudo cerrar #%I64u: %u %s", tk, trade.ResultRetcode(), trade.ResultRetcodeDescription()), "warn"); g_nextClose = TimeCurrent() + 30; }
      }
   }
 
@@ -1595,6 +1847,7 @@ void CloseAllEA()
    CloseMagic(g_magicR5);
    CloseMagic(g_al.magic);
    CloseMagic(InpMagic);        // operaciones abiertas desde la web
+   CloseMagic(g_magicCopy);     // copias de otra cuenta
   }
 
 // Número de posiciones abiertas de este EA en el símbolo
@@ -1684,6 +1937,12 @@ int OpenTrade(const int dir, const double slDist, const double tpR, const long m
    if(NewsBlocked(nwhy))
      {
       Log(StringFormat("%s: omitido por %s (filtro de noticias)", cmt, nwhy), "warn");
+      return RES_DONE;
+     }
+   DisciplineUpdate(false);
+   if(DpBlocked(false, nwhy))
+     {
+      Log(StringFormat("%s: omitido por el protector de disciplina: %s", cmt, nwhy), "warn");
       return RES_DONE;
      }
    if(g_maxOpen > 0 && CountOpenEA() >= g_maxOpen)
@@ -1957,10 +2216,11 @@ void ShowPanel(const int mod)
    last = now;
    double eq = AccountInfoDouble(ACCOUNT_EQUITY);
    string st = g_permBlocked ? "BLOQUEADO (DD máx)" : (g_targetHit ? "OBJETIVO ALCANZADO" : (g_dailyBlocked ? "PAUSA DIARIA" : "ACTIVO"));
+   if(g_dpOn && g_dpWhy != "") st += "  |  DISCIPLINA: " + g_dpWhy;
    string r5 = !g_r5Enable ? "R50 off" : StringFormat("R50 %s (%.2f / %.2f)", (g_r5Done ? "hecho" : "pendiente"), g_r5Dn, g_r5Up);
    string lm = !g_lmEnable ? "LM off" : StringFormat("LM %s", (g_lmDone ? "hecho" : "pendiente"));
    string cb = g_compound ? StringFormat("compuesto ON, base %.2f", g_riskBase) : StringFormat("compuesto OFF, base %.2f", g_initBal);
-   Comment("Web: " + g_bridgeStatus + (g_autotrade ? "  |  Automático ON" : "  |  Automático OFF") + "\n" + StringFormat("XAU Portfolio Bridge v6.10  |  %s\n"
+   Comment("Web: " + g_bridgeStatus + (g_autotrade ? "  |  Automático ON" : "  |  Automático OFF") + "\n" + StringFormat("XAU Portfolio Bridge v6.20  |  %s\n"
                         "Balance inicial %.2f  |  Equity %.2f  |  Ref. día %.2f\n"
                         "Suelo diario %.2f  |  Suelo máx %.2f  |  Freno DD x%.2f\n"
                         "ATR %.2f  |  Riesgo %.2f%% (%s)  |  Cierre por tiempo %s  |  Abiertas %d/%d\n"
@@ -2000,6 +2260,8 @@ void Process()
       CloseMagic(g_al.magic, true);
      }
 
+   DisciplineUpdate(false);
+   DpCloseMt5();
    if(!(g_permBlocked || g_targetHit || g_dailyBlocked))
      {
       NewsCloseCheck();
@@ -2075,6 +2337,7 @@ int OnInit()
       Log("Aviso: el EA está diseñado y probado solo para XAUUSD", "warn");
 
    g_magicLM = InpMagic + 1;
+   g_magicCopy = InpMagic + 9;
    if(!InitOrb(g_ao, "AORB", InpAO_Enable, InpMagic + 2, InpAO_RangeStart, InpAO_RangeEnd, InpAO_ExitTime, InpAO_ExitTime, InpAO_SL_ATR, InpAO_TP_R, false))
       return INIT_PARAMETERS_INCORRECT;
    g_magicR5   = InpMagic + 4;
@@ -2142,7 +2405,7 @@ int OnInit()
       Log("Falta InpBridgeKey: crea la cuenta en la web, copia su clave en las entradas del EA y vuelve a cargarlo.", "warn");
    if(InpWebEnable && !MQLInfoInteger(MQL_TESTER))
       Log("Conectando con la web. Si no conecta, añade " + InpWebURL + " en Herramientas → Opciones → Asesores expertos → Permitir WebRequest.");
-   Log(StringFormat("XAU Portfolio Bridge v6.10 iniciado. Balance inicial %.2f, riesgo %.2f%%", g_initBal, g_riskPct));
+   Log(StringFormat("XAU Portfolio Bridge v6.20 iniciado. Balance inicial %.2f, riesgo %.2f%%", g_initBal, g_riskPct));
    return INIT_SUCCEEDED;
   }
 

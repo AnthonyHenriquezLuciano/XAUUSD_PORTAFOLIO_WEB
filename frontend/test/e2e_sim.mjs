@@ -16,6 +16,15 @@ await page.locator("button.bigbtn.buy").click();
 await page.getByRole("button", { name: /Confirmar COMPRA/ }).click();
 await page.getByText(/lotes enviada/).waitFor({ timeout: 8000 });
 await page.screenshot({ path: `${shots}/sim_movil.png` });
+// dibujo en el simulador (se guarda en el navegador)
+await page.getByRole("button", { name: /Dibujo/ }).click();
+await page.getByRole("button", { name: "Rectángulo / zona" }).click();
+const cb = await page.locator(".chart").boundingBox();
+await page.mouse.move(cb.x + cb.width * 0.4, cb.y + cb.height * 0.3); await page.mouse.down();
+await page.mouse.move(cb.x + cb.width * 0.6, cb.y + cb.height * 0.45, { steps: 6 }); await page.mouse.up();
+const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("xauai.draw.sim") || "[]").length);
+if (saved !== 1) throw new Error("el dibujo no se guardó en el simulador: " + saved);
+await page.screenshot({ path: `${shots}/sim_dibujo.png` });
 await page.getByRole("button", { name: "Estadísticas" }).click();
 await page.getByText("Reglas de fondeo").waitFor({ timeout: 5000 });
 await page.locator(".cal").waitFor();

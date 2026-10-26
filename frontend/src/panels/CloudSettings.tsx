@@ -5,7 +5,8 @@ import { useUI } from "../uiState";
 import { Card, Field, Num, Toggle } from "../ui";
 import { AISettings } from "./Settings";
 import { ChartSettings } from "./ChartSettings";
-import { ManagementCard, NewsFilterCard } from "./AutoSettings";
+import { DisciplineCard, ManagementCard, NewsFilterCard } from "./AutoSettings";
+import CopyCard from "./CopyCard";
 
 function Row({ label, children, hint, pending }: { label: string; children: React.ReactNode; hint?: string; pending?: boolean }) {
   return (
@@ -75,9 +76,12 @@ export function CloudSettings() {
         <div className="hint" style={{ marginTop: 6 }}>Comprueba las reglas vigentes en la web de FundingPips: pueden cambiar (noticias, días mínimos, consistencia).</div>
       </Card>
 
+      <DisciplineCard />
       <NewsFilterCard />
 
       <ManagementCard />
+
+      <CopyCard />
 
       <ChartSettings />
 

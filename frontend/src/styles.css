@@ -234,3 +234,22 @@ table.t td.n, table.t th.n { text-align: right; font-family: var(--mono); }
 .cal-v { font-size: 11px; text-align: right; }
 table.t th.n, table.t td.n { text-align: right; }
 @media (max-width: 760px) { .grid3 { grid-template-columns: 1fr 1fr; } .cal-d { min-height: 36px; } .cal-v { font-size: 10px; } }
+.copy-row { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--line); }
+.copy-row .grow { min-width: 0; }
+
+/* herramientas de dibujo */
+.chart-legend.shift { left: 50px; }
+.draw-bar { position: absolute; left: 6px; top: 50%; transform: translateY(-50%); z-index: 5; display: flex; flex-direction: column; gap: 2px; padding: 4px; background: rgba(13,16,22,.88); border: 1px solid var(--line); border-radius: 8px; max-height: calc(100% - 16px); overflow-y: auto; scrollbar-width: none; }
+.draw-bar::-webkit-scrollbar { display: none; }
+.draw-btn { width: 32px; height: 30px; display: grid; place-items: center; background: none; border: 0; border-radius: 6px; color: var(--muted); cursor: pointer; padding: 0; }
+.draw-btn:hover { background: var(--panel2); color: var(--text); }
+.draw-btn.on { background: rgba(224,176,79,.16); color: var(--gold2); }
+.draw-btn:disabled { opacity: .35; cursor: default; }
+.draw-sep { height: 1px; background: var(--line); margin: 3px 4px; }
+.draw-sel { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); z-index: 6; display: flex; align-items: center; gap: 5px; padding: 4px 8px; background: rgba(13,16,22,.94); border: 1px solid var(--line); border-radius: 8px; white-space: nowrap; max-width: calc(100% - 16px); overflow-x: auto; }
+.draw-sel select { padding: 2px 4px; font-size: 12px; }
+.swatch { width: 16px; height: 16px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; padding: 0; flex: none; }
+.swatch.on { border-color: #fff; }
+.draw-hint { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); z-index: 5; background: rgba(13,16,22,.9); border: 1px solid var(--gold); color: var(--gold2); border-radius: 7px; padding: 4px 10px; font-size: 12px; pointer-events: none; white-space: nowrap; }
+.draw-text { position: absolute; z-index: 7; width: 200px; padding: 5px 8px; font-size: 13px; border: 1px solid var(--gold); }
+@media (max-width: 760px) { .draw-btn { width: 30px; height: 28px; } .draw-hint { white-space: normal; width: max-content; max-width: 90%; text-align: center; } }

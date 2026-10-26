@@ -30,14 +30,14 @@ const db = {
     strategies: [{ name: "R50", enabled: true, state: "hecha hoy", levels: null }, { name: "TOK", enabled: true, state: "sin señal hoy", levels: null }, { name: "AORB", enabled: true, state: "orden pendiente", levels: { buy: price + 12, sell: price - 9 } }, { name: "ALB", enabled: true, state: "pendiente", levels: null }, { name: "LM", enabled: false, state: "desactivada", levels: null }],
     risk: { init_bal: 100000, day_ref: 100000, risk_base: 100000, daily_floor: 97500, max_floor: 91000, daily_limit: 97000, max_limit: 90000, target: 108000, blocked: null, autotrade: false },
     market: { open: true },
-    ea: { version: "6.10", symbol: "XAUUSD", magic: 2610200, digits: 2, contract: 100, vol_min: 0.01, vol_step: 0.01, server_shift_min: 0, atr: 60,
+    ea: { version: "6.20", symbol: "XAUUSD", magic: 2610200, digits: 2, contract: 100, vol_min: 0.01, vol_step: 0.01, server_shift_min: 0, atr: 60,
       settings: { autotrade: false, risk_pct: 0.3, max_open_trades: 4, use_time_exit: true, compound: true, daily_guard_pct: 2.5, max_guard_pct: 9, target_pct: 8, initial_balance: 100000, max_loss_pct: 10,
-        news_enabled: false, news_before: 5, news_after: 5, news_impact: "high", news_close: false, news_close_min: 10, mg_scope: "todas", be_enabled: false, be_r: 1, be_offset: 0.1, tr_enabled: false, tr_start_r: 1.5, tr_dist_r: 1, pt_enabled: false, pt_r: 1, pt_pct: 50, strategies: { LM: false, AORB: true, TOK: true, R50: true, ALB: true } } } }],
+        news_enabled: false, news_before: 5, news_after: 5, news_impact: "high", news_close: false, news_close_min: 10, mg_scope: "todas", be_enabled: false, be_r: 1, be_offset: 0.1, tr_enabled: false, tr_start_r: 1.5, tr_dist_r: 1, pt_enabled: false, pt_r: 1, pt_pct: 50, dp_enabled: false, dp_scope: "manuales", dp_max_losses: 0, dp_max_trades: 0, dp_profit_pct: 0, dp_loss_pct: 0, dp_cooldown_min: 0, dp_windows: "", dp_close_mt5: false, strategies: { LM: false, AORB: true, TOK: true, R50: true, ALB: true } } } }],
   live: [{ account_id: ACC, bid: price, ask: price + 0.15, t: lastTs + 60, equity: 100000, balance: 100000, margin: 0, free_margin: 100000, profit: {}, open: true, updated_at: nowIso() }],
   settings: [{ account_id: ACC, data: {}, updated_at: nowIso() }],
   events: [{ id: 1, account_id: ACC, t: nowIso(), level: "info", msg: "XAU Portfolio Bridge v6 iniciado" }],
   trades: [{ id: 1, account_id: ACC, ticket: 4990, source: "manual", strategy: "MANUAL", magic: 2610200, side: -1, lots: 0.5, entry: B.o[N - 2000], sl0: B.o[N - 2000] + 6, tp0: B.o[N - 2000] - 12, sl: null, tp: null, t_open: B.ts[N - 2000], exit: B.c[N - 1900], t_close: B.ts[N - 1900], pnl: 100, r: 0.3, reason: "MANUAL", status: "cerrada", prediction: null, evaluation: null, note: "", updated_at: nowIso() }],
-  commands: [], notes: [], chat_messages: [],
+  commands: [], notes: [], chat_messages: [], drawings: [], copy_links: [], copy_map: [],
   news: [
     { id: 1, ts: Math.floor(Date.now() / 1000) + 3 * 3600, country: "USD", title: "Non-Farm Employment Change", impact: "High", forecast: "150K", previous: "142K" },
     { id: 2, ts: Math.floor(Date.now() / 1000) + 26 * 3600, country: "USD", title: "CPI m/m", impact: "High", forecast: "0.3%", previous: "0.2%" },
@@ -49,12 +49,13 @@ const log = [];
 
 function match(row, params) {
   for (const [k, v] of params) {
-    if (["select", "order", "limit", "offset", "columns", "on_conflict"].includes(k)) continue;
+    if (["select", "order", "limit", "offset", "columns", "on_conflict", "or"].includes(k)) continue;
     const [op, ...rest] = v.split(".");
     const val = rest.join(".");
     const cell = row[k];
     if (op === "eq" && String(cell) !== val) return false;
     if (op === "gt" && !(Number(cell) > Number(val))) return false;
+    if (op === "in" && !val.replace(/^\(|\)$/g, "").split(",").map((x) => x.replace(/"/g, "")).includes(String(cell))) return false;
     if (op === "gte" && !(Number(cell) >= Number(val))) return false;
     if (op === "lte" && !(Number(cell) <= Number(val))) return false;
   }
@@ -180,6 +181,8 @@ await page.route(`${BASE}/**`, async (route) => {
     if (fn === "get_daily") return json(getDaily(a.p_shift_min, a.p_before));
     if (fn === "set_anthropic_key") return json(true);
     if (fn === "rotate_bridge_key") return json("xau_" + "ab".repeat(24));
+    if (fn === "copy_link_save") { const r = { id: db.copy_links.length + 1, ...a.p }; db.copy_links = [...db.copy_links.filter((x) => !(x.master_id === r.master_id && x.follower_id === r.follower_id)), r]; return json(r.id); }
+    if (fn === "copy_link_delete") { db.copy_links = db.copy_links.filter((x) => x.id !== a.p_id); return json(true); }
     return json(null);
   }
   if (path.startsWith("/rest/v1/")) {
@@ -202,7 +205,8 @@ await page.route(`${BASE}/**`, async (route) => {
       const body = JSON.parse(req.postData() || "{}");
       const list = Array.isArray(body) ? body : [body];
       const made = list.map((r) => ({ id: ids++, created_at: nowIso(), user_id: UID, ...r, ...(table === "commands" ? { status: "pending", created_by: UID } : {}) }));
-      rows.push(...made);
+      if (table === "drawings") db.drawings = db.drawings.filter((x) => !made.some((m) => m.id === x.id));
+      (table === "drawings" ? db.drawings : rows).push(...made);
       log.push({ insert: table, row: made[0] });
       if (table === "commands") setTimeout(() => eaRun(made[0]), 700);
       const out = made.map((r) => project(r, sel));
@@ -363,6 +367,96 @@ try {
     await shot("22_estadisticas");
     await page.locator(".cal").scrollIntoViewIfNeeded();
     await shot("23_calendario");
+  });
+  await step("herramientas de dibujo", async () => {
+    await page.getByRole("button", { name: "Operar" }).click();
+    await page.getByRole("button", { name: /Dibujo/ }).click();
+    const box = await page.locator(".chart").boundingBox();
+    const at = (fx, fy) => [box.x + box.width * fx, box.y + box.height * fy];
+    // línea horizontal con un clic
+    await page.getByRole("button", { name: "Línea horizontal" }).click();
+    await page.mouse.click(...at(0.45, 0.25));
+    await page.waitForTimeout(400);
+    if (db.drawings.length !== 1) throw new Error("no se guardó la línea horizontal: " + db.drawings.length);
+    await page.locator(".draw-sel").waitFor();
+    // tendencia arrastrando
+    await page.getByRole("button", { name: "Línea de tendencia" }).click();
+    await page.mouse.move(...at(0.2, 0.75)); await page.mouse.down(); await page.mouse.move(...at(0.55, 0.62), { steps: 8 }); await page.mouse.up();
+    // rectángulo con dos clics
+    await page.getByRole("button", { name: "Rectángulo / zona" }).click();
+    await page.mouse.click(...at(0.6, 0.7)); await page.mouse.move(...at(0.75, 0.82), { steps: 4 }); await page.mouse.click(...at(0.75, 0.82));
+    // Fibonacci
+    await page.getByRole("button", { name: "Retroceso de Fibonacci" }).click();
+    await page.mouse.move(...at(0.25, 0.9)); await page.mouse.down(); await page.mouse.move(...at(0.4, 0.35), { steps: 8 }); await page.mouse.up();
+    await page.waitForTimeout(500);
+    if (db.drawings.length !== 4) throw new Error("se esperaban 4 dibujos guardados: " + db.drawings.length);
+    // color de lo seleccionado (el Fibonacci)
+    await page.locator(".draw-sel .swatch").nth(1).click();
+    await page.waitForTimeout(400);
+    if (!db.drawings.some((d) => d.kind === "fib" && d.data.color === "#4c8dff")) throw new Error("no cambió el color");
+    // medir
+    await page.getByRole("button", { name: "Medir (precio, % y tiempo)" }).click();
+    await page.mouse.move(...at(0.5, 0.8)); await page.mouse.down(); await page.mouse.move(...at(0.7, 0.4), { steps: 6 }); await page.mouse.up();
+    await page.waitForTimeout(300);
+    await page.locator(".chartwrap").screenshot({ path: `${shots}/24_dibujos.png` });
+    // seleccionar la línea horizontal y moverla
+    const hl = db.drawings.find((d) => d.kind === "hline");
+    const p0 = hl.data.a.p;
+    await page.mouse.click(...at(0.3, 0.1));               // quita la medición
+    await page.mouse.move(...at(0.3, 0.25)); await page.mouse.down(); await page.mouse.move(...at(0.3, 0.18), { steps: 6 }); await page.mouse.up();
+    await page.waitForTimeout(400);
+    const p1 = db.drawings.find((d) => d.id === hl.id).data.a.p;
+    if (!(p1 > p0)) throw new Error(`la línea no se movió hacia arriba (${p0} -> ${p1})`);
+    // borrar con Supr
+    await page.keyboard.press("Delete");
+    await page.waitForTimeout(400);
+    if (db.drawings.length !== 3) throw new Error("no se borró con Supr: " + db.drawings.length);
+    // cambiar de temporalidad mantiene los dibujos
+    await page.getByRole("button", { name: "M15", exact: true }).click();
+    await page.waitForTimeout(1200);
+    await page.locator(".chartwrap").screenshot({ path: `${shots}/25_dibujos_m15.png` });
+    await page.getByRole("button", { name: "M5", exact: true }).click();
+  });
+  await step("protector de disciplina", async () => {
+    await page.getByRole("button", { name: "Ajustes" }).click();
+    const dp = page.locator(".card", { has: page.getByText("Protector de disciplina", { exact: true }) });
+    await dp.locator(".toggle").first().click();
+    await dp.getByLabel("Pérdidas seguidas para parar el día · desactivado").fill("2");
+    await dp.getByLabel("Horas sin operar (hora del servidor)").fill("23:45-01:15");
+    await dp.getByRole("button", { name: "Guardar" }).click();
+    await page.waitForTimeout(1500);
+    const d = db.settings[0].data;
+    if (d.dp_enabled !== true || d.dp_max_losses !== 2 || d.dp_windows !== "23:45-01:15") throw new Error("ajustes de disciplina no guardados: " + JSON.stringify(d));
+    // el EA informa de un bloqueo
+    db.account_state[0].market = { ...db.account_state[0].market, discipline: { why: "2 pérdidas seguidas hoy", until: lastTs + 86400, losses: 2, trades: 3, scope: "manuales" } };
+    push("account_state", "UPDATE", { ...db.account_state[0] });
+    await page.getByText(/Disciplina · 2 pérdidas seguidas hoy/).waitFor({ timeout: 5000 });
+    await dp.scrollIntoViewIfNeeded();
+    await shot("26_disciplina");
+    await page.getByRole("button", { name: "Operar" }).click();
+    await page.locator("button.bigbtn.buy").click();
+    await page.getByText(/Protector de disciplina: 2 pérdidas seguidas hoy/).waitFor();
+    if (!(await page.getByRole("button", { name: /Confirmar COMPRA/ }).isDisabled())) throw new Error("la orden debería estar bloqueada");
+    await page.locator("button.bigbtn.buy").click();         // cerrar la orden en preparación
+    db.account_state[0].market = { ...db.account_state[0].market, discipline: { why: null, until: null, losses: 0, trades: 3, scope: "manuales" } };
+    push("account_state", "UPDATE", { ...db.account_state[0] });
+  });
+  await step("copiador entre cuentas", async () => {
+    const ACC2 = "a1b2c3d4-0000-4000-8000-000000000002";
+    db.accounts.push({ id: ACC2, owner: UID, name: "FundingPips 5k Master", login: 40000361087, server: "FundingPips-Live", symbol: "XAUUSD", created_at: "2026-10-21T00:00:00Z" });
+    await page.getByRole("button", { name: "Ajustes" }).click();
+    const cc = page.locator(".card", { has: page.getByText("Copiador entre cuentas", { exact: true }) });
+    await cc.getByText("Esta cuenta no copia ninguna otra.").waitFor();
+    await cc.getByRole("button", { name: "Copiar otra cuenta" }).click();
+    await cc.locator("select").first().selectOption(ACC2);
+    await cc.getByRole("button", { name: "Riesgo %" }).click();
+    await cc.getByRole("button", { name: "Empezar a copiar" }).click();
+    await cc.getByText(/Copia de FundingPips 5k Master/).waitFor({ timeout: 5000 });
+    const l = db.copy_links[0];
+    if (!l || l.master_id !== ACC2 || l.follower_id !== ACC || l.lot_mode !== "risk" || l.lot_value !== 0.3) throw new Error("copiador mal guardado: " + JSON.stringify(l));
+    await cc.scrollIntoViewIfNeeded();
+    await shot("27_copiador");
+    db.accounts.pop();
   });
   await step("backtest con gestión automática", async () => {
     await page.getByRole("button", { name: "Estrategias" }).click();

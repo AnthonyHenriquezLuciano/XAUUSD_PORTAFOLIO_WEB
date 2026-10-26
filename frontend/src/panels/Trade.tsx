@@ -22,6 +22,8 @@ export default function Trade() {
   const canSend = connected && (s.broker === "sim" || ((s.role === "owner" || s.role === "trader") && !!s.ea?.online));
   const why = !connected ? "" : s.broker === "cloud" && !(s.role === "owner" || s.role === "trader") ? "Tu acceso a esta cuenta es de solo lectura." : s.broker === "cloud" && !s.ea?.online ? "El EA no está conectado: abre MT5 con el EA puente para poder operar." : "";
 
+  const dpWhy: string | null = s.broker === "cloud" ? s.market?.discipline?.why || null : null;
+
   const start = (side: number) => {
     if (!t) return;
     const entry = side > 0 ? t.ask : t.bid;
@@ -117,7 +119,8 @@ export default function Trade() {
           {pred?.risk_note ? <div className="warnbox" style={{ marginTop: 8 }}>{pred.risk_note}</div> : null}
           {s.risk?.blocked ? <div className="errbox" style={{ marginTop: 8 }}>Cuenta bloqueada: {s.risk.blocked}</div> : null}
           {why ? <div className="warnbox small" style={{ marginTop: 8 }}>{why}</div> : null}
-          <button className={`btn primary`} style={{ width: "100%", marginTop: 10, background: pv.side > 0 ? "#22b07d" : "#e5534b", borderColor: "transparent", color: "#fff" }} disabled={busy || !canSend} onClick={send}>
+          {dpWhy ? <div className="errbox small" style={{ marginTop: 8 }}>Protector de disciplina: {dpWhy}. El EA no abrirá esta operación{s.market.discipline.until ? ` hasta las ${new Date((s.market.discipline.until - (s.news_offset ?? 7200)) * 1000).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}` : ""}.</div> : null}
+          <button className={`btn primary`} style={{ width: "100%", marginTop: 10, background: pv.side > 0 ? "#22b07d" : "#e5534b", borderColor: "transparent", color: "#fff" }} disabled={busy || !canSend || !!dpWhy} onClick={send}>
             {busy ? (s.broker === "cloud" ? "Enviando al EA…" : "Enviando…") : `Confirmar ${pv.side > 0 ? "COMPRA" : "VENTA"}`}
           </button>
         </Card>

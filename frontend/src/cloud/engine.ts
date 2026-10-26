@@ -24,6 +24,7 @@ export const EXTRA_DEFAULTS: Record<string, any> = {
   news_enabled: false, news_before: 5, news_after: 5, news_impact: "high", news_close: false, news_close_min: 10,
   mg_scope: "todas", be_enabled: false, be_r: 1, be_offset: 0.1, tr_enabled: false, tr_start_r: 1.5, tr_dist_r: 1,
   pt_enabled: false, pt_r: 1, pt_pct: 50, min_days: 3, consistency_pct: 0,
+  dp_enabled: false, dp_scope: "manuales", dp_max_losses: 0, dp_max_trades: 0, dp_profit_pct: 0, dp_loss_pct: 0, dp_cooldown_min: 0, dp_windows: "", dp_close_mt5: false,
 };
 const WEB_ONLY = new Set(["min_days", "consistency_pct"]);
 const START: Record<string, string> = { R50: "01:05", TOK: "03:30", AORB: "04:30", ALB: "09:00", LM: "09:30" };
@@ -111,12 +112,13 @@ export async function createCloud(accountId: string): Promise<Backend> {
     }
     // un EA antiguo no conoce estos ajustes
     const eaSupports = e.news_enabled !== undefined;
+    const eaDiscipline = e.dp_enabled !== undefined;
     return {
       symbol: symbol(), contract_size: contract(), magic: ea().magic, server_shift_min: shift(), autotrade: !!v("autotrade", false),
       risk: { risk_pct: Number(v("risk_pct", 0.3)), max_open_trades: Number(v("max_open_trades", 4)), use_time_exit: !!v("use_time_exit", true), compound: !!v("compound", true) },
       funding: { enabled: true, phase: Number(d.phase ?? (Number(e.target_pct) === 8 ? 1 : Number(e.target_pct) === 5 ? 2 : 0)), daily_loss_pct: 3, max_loss_pct: Number(e.max_loss_pct ?? 10),
         daily_guard_pct: Number(v("daily_guard_pct", 2.5)), max_guard_pct: Number(v("max_guard_pct", 9)), target_pct: Number(v("target_pct", 0)), initial_balance: Number(e.initial_balance || 0) },
-      strategies: strat, pending, ea_settings: e, web_settings: d, extra, ea_supports_extra: eaSupports,
+      strategies: strat, pending, ea_settings: e, web_settings: d, extra, ea_supports_extra: eaSupports, ea_supports_dp: eaDiscipline,
     };
   }
   function eaInfo() {
@@ -126,7 +128,7 @@ export async function createCloud(accountId: string): Promise<Backend> {
   function market() {
     const m = st.market || {};
     if (!eaOnline()) return { open: false, reason: "el EA no está conectado", last_tick: live.t || null };
-    return { open: live.open ?? m.open ?? true, reason: "sin precios recientes del bróker", last_tick: live.t || null, news: m.news || null };
+    return { open: live.open ?? m.open ?? true, reason: "sin precios recientes del bróker", last_tick: live.t || null, news: m.news || null, discipline: m.discipline || null };
   }
   const journalRow = (t: any) => ({ id: t.id, ticket: Number(t.ticket), source: t.source, strategy: t.strategy, side: t.side, lots: t.lots, entry: t.entry,
     sl: t.sl0 ?? t.sl, tp: t.tp0 ?? t.tp, sl0: t.sl0, tp0: t.tp0, sl_now: t.sl, tp_now: t.tp, t_open: Number(t.t_open), exit: t.exit, t_close: t.t_close ? Number(t.t_close) : null,

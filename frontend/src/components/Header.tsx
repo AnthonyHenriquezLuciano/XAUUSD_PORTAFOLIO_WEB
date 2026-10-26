@@ -69,6 +69,7 @@ export default function Header({ onExitSim }: { onExitSim?: () => void }) {
             </>
           ) : null}
           {r.blocked ? <span className="chip down">Bloqueado: {r.blocked}</span> : null}
+          {s.market?.discipline?.why ? <span className="chip down" title="Protector de disciplina: no se abren operaciones">Disciplina · {s.market.discipline.why}{s.market.discipline.until ? ` · hasta ${new Date((s.market.discipline.until - (s.news_offset ?? 7200)) * 1000).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}` : ""}</span> : null}
           {s.market?.news ? <span className="chip down" title="Filtro de noticias: el EA no abre operaciones">Pausa por noticia · {s.market.news.title} · hasta {new Date(s.market.news.until * 1000).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}</span> : null}
         </>
       ) : null}

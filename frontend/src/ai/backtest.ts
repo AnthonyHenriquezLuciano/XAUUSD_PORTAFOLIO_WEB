@@ -76,7 +76,7 @@ export type BTConfig = {
   use_time_exit: boolean; no_time_exit_tp_r: number; dd_throttle: boolean; throttle_min: number; max_spread: number; min_lot_tol: number;
   contract: number; cost_per_lot: number; lot_step: number; lot_min: number; daily_guard_pct: number; max_guard_pct: number; max_loss_pct: number; target_pct: number;
   start?: number; end?: number;
-  /** Gestión automática (como el EA v6.10): break-even, trailing y cierre parcial, en múltiplos del SL inicial (R). */
+  /** Gestión automática (como el EA v6.10+): break-even, trailing y cierre parcial, en múltiplos del SL inicial (R). */
   mg?: MgCfg | null;
 };
 export type MgCfg = { be: boolean; be_r: number; be_off: number; tr: boolean; tr_start: number; tr_dist: number; pt: boolean; pt_r: number; pt_pct: number };
