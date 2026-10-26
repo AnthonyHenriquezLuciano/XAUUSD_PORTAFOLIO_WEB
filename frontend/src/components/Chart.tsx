@@ -142,7 +142,7 @@ export default function Chart() {
       const lastLive=lastRef.current;
       // Keep the most recent in-flight candle while MT5 uploads the closed M1.
       if(lastLive&&bars.length&&Number(lastLive.time)>Number(bars[bars.length-1].time)&&!reset)
-        bars.push({...lastLive,time:lastLive.time as UTCTimestamp});
+        bars.push({...lastLive,time:lastLive.time as UTCTimestamp,volume:0});
       candleRef.current.setData(bars);
       volumeRef.current?.setData(bars.filter(b=>b.volume>0&&Number.isFinite(b.volume))
         .map(b=>({time:b.time,value:b.volume,
