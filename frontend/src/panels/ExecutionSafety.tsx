@@ -35,7 +35,7 @@ export default function ExecutionSafety() {
   const stat = (label:string,val:React.ReactNode)=> <div className="safety-metric"><span>{label}</span><b>{val}</b></div>;
   return <div className="premium-center">
     <div className="premium-hero">
-      <div><div className="premium-eyebrow">EXECUTION GUARDIAN · ETAPA 1</div><h1>Seguridad y conciliación</h1>
+      <div><div className="premium-eyebrow">CONTROL OPERATIVO / EJECUCIÓN MT5</div><h1>Control de ejecución</h1>
         <p>Órdenes remotas, comunicación con MT5 y límites de exposición de la cuenta.</p></div>
       <button className="btn sm" onClick={load} disabled={!authorised || busy}>{busy?"Consultando…":"Actualizar ledger"}</button>
     </div>
@@ -60,7 +60,7 @@ export default function ExecutionSafety() {
       <p className="premium-note">{audit.advisory}</p>
     </section>}
     <section className="safety-ledger">
-      <h2>Salud del riesgo</h2>
+      <h2>Protección de la cuenta</h2>
       <div className="safety-metrics">
         {stat("Posiciones abiertas",(s.positions||[]).length)}
         {stat("Sin stop loss",risk.exposure.withoutStop)}
@@ -71,7 +71,7 @@ export default function ExecutionSafety() {
       <p className="premium-note">*Las cifras del navegador son orientativas y omiten gaps, swaps, slippage y órdenes pendientes en el presupuesto. La protección final depende del EA y las reglas vigentes de tu cuenta de fondeo.</p>
     </section>
     <section className="safety-ledger">
-      <h2>Siguiente protección de infraestructura</h2>
+      <h2>Protecciones pendientes</h2>
       <p className="premium-note">Pendiente: deduplicación transaccional en Supabase, reconocimiento persistente de comandos en MT5, conciliación con el historial de deals y separación del HTTP síncrono. Requieren MT5 demo para validar sin exponer una cuenta real.</p>
     </section>
   </div>;
