@@ -86,7 +86,7 @@ export default function CommandCenter({ alerts }: { alerts: SmartAlerts }) {
       setLoading(false);
       if (ac.error || live.error) { setAccountError(ac.error?.message || live.error?.message || "Error de cuentas"); return; }
       setAccountError("");
-      const states = new Map((live.data || []).map((x: any) => [x.account_id, x]));
+      const states = new Map<string, any>((live.data || []).map((x: any): [string, any] => [x.account_id, x]));
       setAccounts((ac.data || []).map((x: any) => ({ ...x, equity: states.get(x.id)?.equity ?? null, updated_at: states.get(x.id)?.updated_at ?? null })));
     };
     void load();
