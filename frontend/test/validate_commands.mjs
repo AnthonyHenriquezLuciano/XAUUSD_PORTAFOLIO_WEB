@@ -16,7 +16,7 @@ assert.equal(a.blocked,true);
 assert.equal(a.pending.length,2);
 assert.equal(a.oldestAgeSec,31);
 assert.equal(a.recentFailures,1);
-assert.match(a.explained,/sin confirmación/);
+assert.match(a.explained,/no ha sido confirmado/);
 assert.match(commandNotice(rows[0],time),/#10.*31 s/);
 const clean=commandAudit(rows.filter(x=>x.status==="done"||x.status==="error"));
 assert.equal(clean.blocked,false);
