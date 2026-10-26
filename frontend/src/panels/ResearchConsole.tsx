@@ -31,7 +31,7 @@ export default function ResearchConsole(){
   const dataOk=!!q&&q.bars>1400&&!q.invalidOhlc&&q.volumePct>=85;
   return <div className="premium-center science-page">
     <div className="premium-hero">
-      <div><div className="premium-eyebrow">RESEARCH LAB · DATA QUALITY / EVIDENCE</div><h1>Centro científico</h1>
+      <div><div className="premium-eyebrow">ANÁLISIS CUANTITATIVO / CALIDAD DE DATOS</div><h1>Investigación de mercado</h1>
         <p>Investigación reproducible de niveles de XAUUSD, sin convertir correlaciones en promesas de predicción.</p></div>
       <button className="btn sm" disabled={!cloud||busy} onClick={()=>setRefresh(v=>v+1)}>
         {busy?"Analizando…":"Recalcular evidencia"}
@@ -46,7 +46,7 @@ export default function ResearchConsole(){
       <div><span>Calidad OHLC</span><b className={q?.invalidOhlc?"sell":"buy"}>{!q?"—":q.invalidOhlc===0?"Validada":"Alertas: "+q.invalidOhlc}</b></div>
     </div>
     <section className="science-section">
-      <h2>Etapa 2 · Integridad de datos</h2>
+      <h2>Calidad del histórico</h2>
       <div className="science-data-grid">
         <div><span>Primera vela</span><b>{formatTime(q?.first??null)}</b></div>
         <div><span>Última vela</span><b>{formatTime(q?.last??null)}</b></div>
@@ -59,7 +59,7 @@ export default function ResearchConsole(){
       {q&&!dataOk&&<div className="premium-warn">El histórico no alcanza la puerta mínima de calidad para comparar objetivos. No se emiten probabilidades utilizables.</div>}
     </section>
     <section className="science-section">
-      <div className="science-section-title"><div><h2>Etapas 4–5 · ¿Alcanza el nivel antes del stop?</h2>
+      <div className="science-section-title"><div><h2>Frecuencia histórica de llegada a niveles</h2>
         <p>Prueba cronológica de barreras con datos históricos. No ejecuta operaciones.</p></div></div>
       <div className="science-controls">
         <label>Nivel a evaluar
@@ -107,7 +107,7 @@ export default function ResearchConsole(){
       </div>}
     </section>
     <section className="science-section">
-      <h2>Protocolo de validación</h2>
+      <h2>Metodología y limitaciones</h2>
       <p className="premium-note">Las muestras son exploratorias y los eventos se espacian para evitar horizontes superpuestos. La evaluación actual divide entrenamiento y reserva de forma cronológica, pero no sustituye Walk-Forward múltiple, validación por bróker ni una muestra futura independiente. Los resultados están condicionados al histórico de la cuenta conectada y al supuesto de ejecuciones al cierre M1.</p>
       {r?.methods&&<div className="science-methods">{r.methods.map((m,i)=><p key={i}>• {m}</p>)}</div>}
     </section>
