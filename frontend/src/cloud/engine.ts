@@ -7,6 +7,7 @@ import { computeFeatures, FeatTable } from "../ai/features";
 import { loadModels, Models, predictEntry, scenGet, labelRegime, labelVol } from "../ai/model";
 import { evaluateTrade, featAt, marketState, zonesAt } from "../ai/analytics";
 import { supabase } from "../lib/supabase";
+import { commandAudit, outstandingCommands } from "../premium/commandGuard";
 
 const WINDOW_DAYS = 30;
 const TFM: Record<string, number> = { M1: 1, M5: 5, M15: 15, M30: 30, H1: 60, H4: 240, D1: 1440 };
@@ -261,10 +262,31 @@ export async function createCloud(accountId: string): Promise<Backend> {
     return evaluateTrade(s2, T2, models, tr, Number(live.balance || st.account?.balance || 0), contract());
   }
 
+  // Guard against knowingly resubmitting a second remote trade while an
+  // earlier command may have executed but lost its acknowledgement.
+  // This is advisory on the web only. Exactly-once still requires MQL5/DB reconciliation.
+  async function commandRows(outstandingOnly = false) {
+    let q = supabase.from("commands")
+      .select("id,type,status,created_at,done_at,result")
+      .eq("account_id", accountId).order("id", {ascending:false});
+    if (outstandingOnly) q = q.in("status",["pending","sent"])
+       .in("type",["open","close","close_all","modify","modify_order","cancel"]).limit(100);
+    else q = q.limit(80);
+    const {data,error} = await q;
+    if (error) fail("No se pudo verificar el estado de los comandos MT5. Por seguridad no se enviará otra orden: "+error.message);
+    return data || [];
+  }
+
   // ------------------------------------------------------------------ órdenes al EA
   async function command(type: string, payload: any, label?: string): Promise<any> {
     needTrader();
     if (!eaOnline()) fail("El EA no está conectado ahora mismo: abre MT5 con el EA puente en el gráfico de " + symbol() + ".");
+    if (type === "open") {
+      const unresolved = outstandingCommands(await commandRows(true));
+      if (unresolved.length) fail(
+        "Hay "+unresolved.length+" comando(s) MT5 sin confirmación. Revisa las órdenes e historial en MT5 y el nuevo panel de conciliación antes de abrir otra operación. No repitas la entrada."
+      );
+    }
     const { data, error } = await supabase.from("commands").insert({ account_id: accountId, type, payload }).select("id").single();
     if (error) fail(error.message.includes("row-level") ? "No tienes permiso para operar esta cuenta." : error.message);
     const id = Number(data!.id);
@@ -273,7 +295,7 @@ export async function createCloud(accountId: string): Promise<Backend> {
         waiting.delete(id);
         const { data: c } = await supabase.from("commands").select("status,result").eq("id", id).maybeSingle();
         if (c && (c.status === "done" || c.status === "error" || c.status === "expired")) finish(id, c.status, c.result, resolve, reject, label);
-        else reject(new Error("El EA no confirmó la orden en 25 s. Revisa MT5 antes de repetirla: puede haberse ejecutado."));
+        else reject(new Error("Comando MT5 #"+id+" sin respuesta definitiva tras 25 s. El resultado es DESCONOCIDO, no fallido: comprueba posiciones, órdenes y operaciones de MT5 antes de intentar otra orden."));
       }, 25000);
       waiting.set(id, { resolve, reject, timer });
       // respaldo por si el tiempo real se pierde un aviso
@@ -511,6 +533,13 @@ export async function createCloud(accountId: string): Promise<Backend> {
         });
       }
       case "GET /api/overlays": return { zones: store && k ? zonesAt(store, k.time) : [], strategies: strategies(), levels: signals.levels || [] };
+      case "GET /api/command_audit": {
+        needTrader();
+        const rows = await commandRows(false);
+        const unresolved = await commandRows(true);
+        return { ...commandAudit(unresolved), rows, account_id: accountId,
+          advisory: "La verificación web no es idempotencia garantizada entre terminales o pestañas; sólo un ledger transaccional y ACK de MT5 pueden cerrar esa condición." };
+      }
       case "GET /api/trades": {
         const src = qs.get("source");
         return { trades: trades.filter((t) => !src || t.source === src).map(journalRow) };
