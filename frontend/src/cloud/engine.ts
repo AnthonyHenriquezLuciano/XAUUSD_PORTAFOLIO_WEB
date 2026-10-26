@@ -493,7 +493,7 @@ export async function createCloud(accountId: string): Promise<Backend> {
       }
       case "GET /api/flow": {
         const flowStore = store;
-        if (!flowStore || !flowStore.length) fail("Sin velas M1 para análisis de volumen.");
+        if (!flowStore || !flowStore.length) throw new Error("Sin velas M1 para análisis de volumen.");
         const scope = qs.get("scope") || "london";
         const mode = qs.get("mode") || "session";
         if (!["tokyo", "london", "newyork", "day"].includes(scope) ||
