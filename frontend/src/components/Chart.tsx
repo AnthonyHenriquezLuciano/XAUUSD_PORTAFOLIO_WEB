@@ -27,6 +27,8 @@ export default function Chart() {
   const timesRef = useRef<number[]>([]);
   const barsRef = useRef<{ time: number; open: number; high: number; low: number; close: number }[]>([]);
   const [ready, setReady] = useState(false);
+  const [barLoad, setBarLoad] = useState<{ phase: "loading" | "ready" | "empty" | "error"; count: number; message?: string }>({ phase: "loading", count: 0 });
+  const [reload, setReload] = useState(0);
   const [drawOpen, setDrawOpen] = useState<boolean>(() => { try { return localStorage.getItem("xauai.drawopen") === "1"; } catch { return false; } });
   const linesRef = useRef<Map<string, { line: IPriceLine; def: LineDef }>>(new Map());
   const lastRef = useRef<{ time: number; open: number; high: number; low: number; close: number } | null>(null);
@@ -53,7 +55,7 @@ export default function Chart() {
       crosshair: { mode: CrosshairMode.Normal },
       rightPriceScale: { borderColor: "#262e3f", scaleMargins: { top: 0.08, bottom: 0.08 } },
       timeScale: { borderColor: "#262e3f", timeVisible: true, secondsVisible: false, rightOffset: 12 },
-      autoSize: true,
+      // Size is controlled explicitly by ResizeObserver so a previously collapsed\n      // grid track cannot leave the chart with a permanent 0px canvas.\n      autoSize: false,
       localization: { locale: "es-ES", priceFormatter: (p: number) => p.toFixed(2) },
     });
     const candle = chart.addCandlestickSeries({
@@ -79,26 +81,63 @@ export default function Chart() {
     });
     const mk = (color: string, style: LineStyle, width: 1 | 2) => chart.addLineSeries({ color, lineStyle: style, lineWidth: width, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
     fcRef.current = [mk("rgba(224,176,79,.7)", LineStyle.Solid, 1), mk("rgba(243,205,122,.95)", LineStyle.Dashed, 2), mk("rgba(224,176,79,.7)", LineStyle.Solid, 1)];
+    const host = el.current;
+    let pendingFrame = 0;
+    const fit = () => {
+      if (!host) return;
+      const w = Math.floor(host.clientWidth), h = Math.floor(host.clientHeight);
+      if (w > 100 && h > 100) chart.resize(w, h);
+    };
+    const observer = new ResizeObserver(() => {
+      if (pendingFrame) cancelAnimationFrame(pendingFrame);
+      pendingFrame = requestAnimationFrame(fit);
+    });
+    if (host) observer.observe(host);
+    pendingFrame = requestAnimationFrame(fit);
     setReady(true);
-    return () => { setReady(false); chart.remove(); chartRef.current = null; candleRef.current = null; linesRef.current.clear(); };
+    return () => {
+      observer.disconnect();
+      if (pendingFrame) cancelAnimationFrame(pendingFrame);
+      chart.remove(); chartRef.current = null; candleRef.current = null;
+      linesRef.current.clear();
+    };
   }, []);
 
   // ------------------------------------------------------------------ datos
   useEffect(() => {
     try { localStorage.setItem("xauai.tf", tf); } catch { /* sin almacenamiento */ }
-    if (!connected || !candleRef.current) return;
+    if (!connected || !candleRef.current) {
+      setBarLoad({ phase: "loading", count: 0 });
+      return;
+    }
     let cancel = false;
+    setBarLoad({ phase: "loading", count: 0 });
     api(`/api/bars?tf=${tf}&limit=3000`).then((d) => {
       if (cancel || !candleRef.current) return;
-      const bars = d.bars.map((b: any) => ({ ...b, time: b.time as UTCTimestamp }));
+      if (!Array.isArray(d?.bars)) throw new Error("La respuesta del histórico no contiene velas.");
+      const bars = d.bars.map((b: any) => ({
+        time: Number(b.time) as UTCTimestamp,
+        open: Number(b.open), high: Number(b.high),
+        low: Number(b.low), close: Number(b.close),
+      }));
+      if (bars.some((b: any, i: number) =>
+        !Number.isFinite(Number(b.time)) || ![b.open,b.high,b.low,b.close].every(Number.isFinite)
+        || b.low > b.high || b.high < Math.max(b.open,b.close) || b.low > Math.min(b.open,b.close)
+        || (i > 0 && Number(b.time) <= Number(bars[i-1].time))
+      )) throw new Error("El histórico contiene velas inválidas o tiempos duplicados. Revisa los datos M1.");
       candleRef.current.setData(bars);
       timesRef.current = bars.map((b: any) => Number(b.time));
       barsRef.current = bars;
       lastRef.current = bars.length ? { ...bars[bars.length - 1] } : null;
-      chartRef.current?.timeScale().scrollToRealTime();
-    }).catch((e) => toast(e.message, "error"));
+      setBarLoad({ phase: bars.length ? "ready" : "empty", count: bars.length });
+      if (bars.length) chartRef.current?.timeScale().fitContent();
+    }).catch((e) => {
+      if (cancel) return;
+      setBarLoad({phase:"error",count:0,message:e?.message || "No se pudo cargar el histórico."});
+      toast(e?.message || "Error al cargar las velas del gráfico", "error");
+    });
     return () => { cancel = true; };
-  }, [tf, connected, s.broker, s.accountInfo?.id, s.barsVersion]);
+  }, [tf, connected, s.broker, s.accountInfo?.id, s.barsVersion, reload]);
 
   // ticks -> última vela
   useEffect(() => {
@@ -381,7 +420,7 @@ export default function Chart() {
           <span className="terminal-symbol">XAUUSD</span>
           <span className="terminal-divider" />
           <span className="terminal-market-label">Oro / dólar estadounidense</span>
-          <span className="terminal-tf">{tf}</span>
+          <span className="terminal-tf">{tf}</span>\n          {barLoad.phase === "ready" && <span className="terminal-bar-count" title="Velas de esta temporalidad">{barLoad.count.toLocaleString("es-ES")} velas</span>}
         </div>
         <div className="terminal-utility">
           <span className={`terminal-connect ${connected ? "online" : ""}`}>
@@ -449,6 +488,20 @@ export default function Chart() {
           {ui.preview ? <div className="box small gold">Arrastra las líneas SL / TP{ui.preview.kind !== "market" ? " / entrada" : ""} en el gráfico</div> : null}
         </div>
         {dragTip ? <div className="dragtip" style={{ top: dragTip.y }}>{dragTip.text}</div> : null}
+        {connected && barLoad.phase !== "ready" && <div className="chart-data-state" role="status" aria-live="polite">
+          {barLoad.phase === "loading" ? <>
+            <span className="chart-data-spinner" aria-hidden="true"/>
+            <strong>Preparando gráfico {tf}</strong>
+            <span>Sincronizando histórico de velas de MT5…</span>
+          </> : <>
+            <Icon name="alert-triangle" size={25}/>
+            <strong>{barLoad.phase === "empty" ? "Sin velas históricas para esta cuenta" : "No se pudo visualizar el histórico"}</strong>
+            <span>{barLoad.phase === "empty"
+              ? "La cotización puede estar activa aunque todavía no se hayan sincronizado las velas M1."
+              : barLoad.message || "Revisa la conexión y la integridad de los datos del bróker."}</span>
+            <button className="btn sm" onClick={()=>setReload(x=>x+1)}>Reintentar carga</button>
+          </>}
+        </div>}
         {!connected ? <ConnectOverlay /> : null}
       </div>
     </div>
