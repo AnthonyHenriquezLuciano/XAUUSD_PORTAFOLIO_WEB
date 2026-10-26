@@ -1,0 +1,21 @@
+import { createRequire } from "module";
+const { chromium } = createRequire(import.meta.url)("/opt/npm-tools/node_modules/playwright/index.js");
+const shots = process.argv[2];
+const browser = await chromium.launch();
+const page = await (await browser.newContext({ viewport: { width: 390, height: 844 }, locale: "es-ES" })).newPage();
+const errors = [];
+page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
+page.on("pageerror", (e) => errors.push(e.message));
+await page.route("https://neqfafcelxgcxroicmer.supabase.co/**", (r) => r.fulfill({ status: 401, body: "{}" }));
+await page.goto("http://localhost:4173/");
+await page.getByRole("button", { name: "Probar el simulador sin cuenta" }).click();
+
+await page.getByText("SIMULADOR", { exact: true }).waitFor({ timeout: 15000 });
+await page.waitForTimeout(3000);
+await page.locator("button.bigbtn.buy").click();
+await page.getByRole("button", { name: /Confirmar COMPRA/ }).click();
+await page.getByText(/lotes enviada/).waitFor({ timeout: 8000 });
+await page.screenshot({ path: `${shots}/sim_movil.png` });
+const sw = await page.evaluate(() => document.documentElement.scrollWidth);
+console.log("simulador OK · ancho", sw, "· errores:", errors.length ? errors : "ninguno");
+await browser.close();
