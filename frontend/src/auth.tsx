@@ -64,11 +64,11 @@ export function Login({ onSim }: { onSim: () => void }) {
         if (error) throw error;
       } else if (mode === "up") {
         if (pw.length < 8) throw new Error("Password should be at least 8");
-        const { data, error } = await supabase.auth.signUp({ email: email.trim(), password: pw, options: { emailRedirectTo: location.origin } });
+        const { data, error } = await supabase.auth.signUp({ email: email.trim(), password: pw, options: { emailRedirectTo: location.origin + (import.meta.env.BASE_URL === "/" ? "" : import.meta.env.BASE_URL) } });
         if (error) throw error;
         if (!data.session) setMsg({ k: "ok", t: "Cuenta creada. Revisa tu correo y pulsa el enlace de confirmación; después entra aquí." });
       } else {
-        const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: location.origin });
+        const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: location.origin + (import.meta.env.BASE_URL === "/" ? "" : import.meta.env.BASE_URL) });
         if (error) throw error;
         setMsg({ k: "ok", t: "Si el correo tiene cuenta, te llegará un enlace para elegir una contraseña nueva." });
       }
