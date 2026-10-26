@@ -8,6 +8,7 @@ export function stopExposure(positions: Position[], bid: number | null, ask: num
   let sellLots = 0;
   let withoutStop = 0;
   let invalidStops = 0;
+  let unpricedStops = 0;
   for (const p of positions) {
     const lots = Number(p.volume);
     const side = Number(p.side);
@@ -17,12 +18,12 @@ export function stopExposure(positions: Position[], bid: number | null, ask: num
     grossLots += lots;
     if (side > 0) buyLots += lots; else sellLots += lots;
     if (!(stop > 0)) { withoutStop++; continue; }
-    if (price == null || !(price > 0)) continue;
+    if (price == null || !(price > 0)) { unpricedStops++; continue; }
     const distance = (price - stop) * side;
     if (distance < 0) { invalidStops++; continue; }
     atStop += distance * lots * contract;
   }
-  return { atStop, grossLots, buyLots, sellLots, withoutStop, invalidStops };
+  return { atStop, grossLots, buyLots, sellLots, withoutStop, invalidStops, unpricedStops };
 }
 
 export function riskSnapshot(s: AppState) {
@@ -49,7 +50,7 @@ export function riskSnapshot(s: AppState) {
     equity, init, dailyFloor, maxFloor, dailyLossPct, maxLossPct,
     dailyRemaining, totalRemaining, budget,
     exposure, pendingLots,
-    headroomAfterStops: budget == null || exposure.withoutStop ? null : budget - exposure.atStop,
+    headroomAfterStops: budget == null || exposure.withoutStop || exposure.unpricedStops || exposure.invalidStops ? null : budget - exposure.atStop,
     isFunding: !!risk.funding || !!funding.enabled
   };
 }
@@ -70,6 +71,7 @@ export function ticketSafety(s: AppState, entry: number, sl: number, side: numbe
   }
   if (risk.exposure.withoutStop) notes.push("Hay posiciones abiertas sin stop loss: la exposición no está acotada.");
   if (risk.exposure.invalidStops) notes.push("Hay stops que no son válidos respecto al precio de mercado.");
+  if (risk.exposure.unpricedStops) notes.push("Faltan cotizaciones para estimar parte de la exposición.");
   if (tick) {
     const spread = tick.ask - tick.bid;
     if (spread > 0) notes.push("Spread actual: $" + spread.toFixed(2) + " por onza; confirma costes con el bróker.");
