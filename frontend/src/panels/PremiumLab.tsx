@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { api } from "../api";
 import { fmt, useApp } from "../store";
 import { ticketSafety } from "../premium/risk";
+import CandleReplay from "../premium/CandleReplay";
 import { useUI } from "../uiState";
 
 type Historic = { ticket: number; t_open: number; t_close: number; status: string; side: number; strategy?: string; source?: string; entry: number; exit?: number; pnl?: number; R?: number | null; reason?: string };
@@ -192,7 +193,8 @@ export default function PremiumLab() {
     </div>}
     {tab === "replay" && <div className="premium-lab-card">
       <h2>Replay de operaciones · Registro histórico</h2>
-      <p className="premium-note">Revisión secuencial de órdenes cerradas. Esta primera versión reproduce el registro de ejecuciones, NO las velas históricas M1 ni condiciones intrabar.</p>
+      <p className="premium-note">Reproduce velas reales del bróker progresivamente y revisa el historial de ejecuciones. No incluye ticks intrabar ni garantiza que las fechas del servidor y el registro de operaciones coincidan sin verificar la zona horaria.</p>
+      <CandleReplay />
       {err && <div className="premium-warn">{err}</div>}
       {ordered.length ? <>
         <input aria-label="Operación histórica" type="range" min={0} max={ordered.length - 1} value={Math.min(replayIndex, ordered.length - 1)} onChange={e => setReplayIndex(Number(e.target.value))} />
