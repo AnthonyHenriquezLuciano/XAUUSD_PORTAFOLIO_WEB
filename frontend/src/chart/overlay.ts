@@ -3,10 +3,14 @@
 // zonas de riesgo/beneficio de las posiciones y de la orden en preparación, y el cono de predicción relleno.
 import type { IChartApi, ISeriesApi, ISeriesPrimitive, ISeriesPrimitivePaneRenderer, ISeriesPrimitivePaneView, Logical, SeriesAttachedParameter, Time } from "lightweight-charts";
 import { alpha, ChartTheme } from "./themes";
+import type { FlowResponse } from "../flow/engine";
 
 export type OverlayData = {
   tf: number;
   times: () => number[];
+  flow?: FlowResponse | null;
+  flowFocus?: "all" | "volume" | "inefficiency" | "structure";
+  flowLayers?: { profile: boolean; fvg: boolean };
   nowT: number;
   atr?: number;
   theme: ChartTheme;
@@ -96,6 +100,45 @@ export class ChartOverlay implements ISeriesPrimitive<Time> {
     const d = this.data;
     if (!d) return;
     const th = d.theme, fillA = th.light ? 0.07 : 0.09;
+    const profile = d.flowLayers?.profile && d.flowFocus !== "inefficiency" && d.flowFocus !== "structure" ? d.flow?.profile : null;
+    if (profile?.bins.length) {
+      const xa = this.x(profile.start), xb = this.x(profile.end);
+      if (xa != null && xb != null && xb > 0 && xa < W) {
+        const right = Math.min(W-4, Math.max(8, xb));
+        const left = Math.max(0, Math.min(right, xa));
+        const width = Math.min(145, Math.max(0, right - left) * .62);
+        const peak = Math.max(1, ...profile.bins.map(b => b.volume));
+        for (const b of profile.bins) {
+          const yl = this.y(b.low), yh = this.y(b.high);
+          if (yl == null || yh == null) continue;
+          const y = Math.min(yh, yl), h = Math.max(1, Math.abs(yl-yh));
+          if (y > _H || y + h < 0) continue;
+          ctx.fillStyle = alpha(b.node === "HVN" ? "#d9af64" : b.node === "LVN" ? "#7b8290" : "#c0a77b", .22);
+          const w = Math.max(0, width * b.volume / peak);
+          if (w >= .1) ctx.fillRect(right - w, y, w, h);
+        }
+        const vah = this.y(profile.vah), val = this.y(profile.val);
+        if (vah != null && val != null) {
+          ctx.fillStyle = alpha("#c49b59", .05);
+          ctx.fillRect(left, Math.min(vah,val), Math.max(1,right-left), Math.abs(val-vah));
+        }
+      }
+    }
+    if (d.flowLayers?.fvg && d.flowFocus !== "volume" && d.flowFocus !== "structure") {
+      for (const gap of d.flow?.gaps || []) {
+        const xa = this.x(gap.start), lo = this.y(gap.lo), hi = this.y(gap.hi);
+        if (xa == null || lo == null || hi == null) continue;
+        const to = this.x(d.nowT) ?? W;
+        if (to <= 0 || xa >= W) continue;
+        const x = Math.max(0,xa), xr=Math.min(W,to);
+        if (xr <= x) continue;
+        const c=gap.side>0?th.buy:th.sell;
+        ctx.fillStyle=alpha(c, .09);
+        ctx.fillRect(x,Math.min(hi,lo),xr-x,Math.abs(lo-hi));
+        ctx.strokeStyle=alpha(c,.36);ctx.lineWidth=1;
+        ctx.strokeRect(Math.floor(x)+.5,Math.floor(Math.min(hi,lo))+.5,xr-x,Math.abs(lo-hi));
+      }
+    }
     // Banda vertical por franja horaria del centro financiero (sin rangos de precio).
     if (d.layers.sesionesReales) {
       for (const z of d.realSessions || []) {
@@ -171,6 +214,16 @@ export class ChartOverlay implements ISeriesPrimitive<Time> {
     if (!d) return;
     const th = d.theme;
     const tags: { y: number; draw: (y: number) => void }[] = [];
+    if (d.flowLayers?.profile && d.flowFocus !== "inefficiency" && d.flowFocus !== "structure" && d.flow?.profile) {
+      const p = d.flow.profile;
+      for (const [tag, price, color] of [["POC",p.poc,"#e5bf7c"],["VAH",p.vah,"#baa071"],["VAL",p.val,"#baa071"],["VWAP*",p.vwap ?? NaN,"#c1b4a2"]] as [string,number,string][]) {
+        const y = this.y(price);
+        if (y == null || !Number.isFinite(y) || y < 18 || y > H-12) continue;
+        ctx.strokeStyle=alpha(color,.38);ctx.lineWidth=1;ctx.setLineDash([2,4]);
+        ctx.beginPath();ctx.moveTo(0,Math.round(y)+.5);ctx.lineTo(W-90,Math.round(y)+.5);ctx.stroke();ctx.setLineDash([]);
+        tags.push({y,draw:(yy)=>pill(ctx,W-5,yy,tag+" "+price.toFixed(2),d.theme.tagBg,color,"right",alpha(color,.35))});
+      }
+    }
 
     if (d.layers.sesionesReales) {
       for (const z of d.realSessions || []) {
