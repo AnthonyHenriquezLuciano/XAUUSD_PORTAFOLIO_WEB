@@ -226,25 +226,28 @@ export class ChartOverlay implements ISeriesPrimitive<Time> {
         tags.push({y,draw:(yy)=>pill(ctx,W-5,yy,labels[i]+" "+price.toFixed(2),th.tagBg,"#bda78a","right",alpha("#bda78a",.25))});
       });
     }
-    if (d.flow && d.flowFocus !== "volume" && d.flowFocus !== "inefficiency") {
-      for (const l of d.flow.levels.filter(x=>x.key==="PWH"||x.key==="PWL")) {
+
+
+
+    // Historical touch frequency: show only supported, non-overlapping holdout
+    // cohorts. "N/D" is more truthful than an invented likelihood.
+    if (d.flow && d.flowFocus !== "inefficiency") {
+      const showProfile=d.flowLayers?.profile && d.flowFocus!=="structure";
+      const showStructure=d.flowFocus!=="volume";
+      const study=new Map((d.flow.reach||[]).map(r=>[r.key,r]));
+      for(const l of d.flow.levels.filter(l=>
+        (showProfile&&["POC","VAH","VAL","VWAP"].includes(l.key)) ||
+        (showStructure&&["PDH","PDL","PWH","PWL"].includes(l.key))
+      )){
         const y=this.y(l.price);
-        if (y == null || !Number.isFinite(y) || y<16 || y>H-16) continue;
-        ctx.strokeStyle=alpha("#d8b77f",.55);ctx.lineWidth=1;ctx.setLineDash([6,4]);
-        ctx.beginPath();ctx.moveTo(0,Math.round(y)+.5);ctx.lineTo(W-100,Math.round(y)+.5);ctx.stroke();ctx.setLineDash([]);
-        tags.push({y,draw:(yy)=>pill(ctx,W-5,yy,l.key+" "+l.price.toFixed(2),th.tagBg,"#d8b77f","right",alpha("#d8b77f",.33))});
-      }
-    }
-
-
-    if (d.flowLayers?.profile && d.flowFocus !== "inefficiency" && d.flowFocus !== "structure" && d.flow?.profile) {
-      const p = d.flow.profile;
-      for (const [tag, price, color] of [["POC",p.poc,"#e5bf7c"],["VAH",p.vah,"#baa071"],["VAL",p.val,"#baa071"],["VWAP*",p.vwap ?? NaN,"#c1b4a2"]] as [string,number,string][]) {
-        const y = this.y(price);
-        if (y == null || !Number.isFinite(y) || y < 18 || y > H-12) continue;
-        ctx.strokeStyle=alpha(color,.38);ctx.lineWidth=1;ctx.setLineDash([2,4]);
-        ctx.beginPath();ctx.moveTo(0,Math.round(y)+.5);ctx.lineTo(W-90,Math.round(y)+.5);ctx.stroke();ctx.setLineDash([]);
-        tags.push({y,draw:(yy)=>pill(ctx,W-5,yy,tag+" "+price.toFixed(2),d.theme.tagBg,color,"right",alpha(color,.35))});
+        if(y==null||!Number.isFinite(y)||y<16||y>H-16)continue;
+        const isProfile=["POC","VAH","VAL","VWAP"].includes(l.key);
+        const color=isProfile?"#dfba78":"#a9b7c6";
+        const result=study.get(l.key as import("../flow/reach").ReachKey);
+        const suffix=result?.percent!=null?" · "+result.percent.toFixed(0)+"% hist/2h":" · N/D";
+        ctx.strokeStyle=alpha(color,isProfile?.4:.3);ctx.lineWidth=1;ctx.setLineDash(isProfile?[2,4]:[5,5]);
+        ctx.beginPath();ctx.moveTo(0,Math.round(y)+.5);ctx.lineTo(W-115,Math.round(y)+.5);ctx.stroke();ctx.setLineDash([]);
+        tags.push({y,draw:(yy)=>pill(ctx,W-5,yy,l.key+" "+l.price.toFixed(2)+suffix,d.theme.tagBg,color,"right",alpha(color,.3))});
       }
     }
 
