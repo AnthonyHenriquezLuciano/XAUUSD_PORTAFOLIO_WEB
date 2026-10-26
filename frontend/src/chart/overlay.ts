@@ -244,7 +244,10 @@ export class ChartOverlay implements ISeriesPrimitive<Time> {
         const isProfile=["POC","VAH","VAL","VWAP"].includes(l.key);
         const color=isProfile?"#dfba78":"#a9b7c6";
         const result=study.get(l.key as import("../flow/reach").ReachKey);
-        const suffix=result?.percent!=null?" · "+result.percent.toFixed(0)+"% hist/2h":" · N/D";
+        const pocBin=d.flow.profile?.bins.find(b=>d.flow?.profile?.poc!=null && d.flow.profile.poc>=b.low && d.flow.profile.poc<=b.high);
+        const labelShare=l.key==="POC"&&pocBin?" · "+(pocBin.share*100).toFixed(1)+"% actividad":
+          (l.key==="VAH"||l.key==="VAL")?" · VA 70% actividad":" · N/D";
+        const suffix=result?.percent!=null?" · "+result.percent.toFixed(0)+"% toque/2h":labelShare;
         ctx.strokeStyle=alpha(color,isProfile?.4:.3);ctx.lineWidth=1;ctx.setLineDash(isProfile?[2,4]:[5,5]);
         ctx.beginPath();ctx.moveTo(0,Math.round(y)+.5);ctx.lineTo(W-115,Math.round(y)+.5);ctx.stroke();ctx.setLineDash([]);
         tags.push({y,draw:(yy)=>pill(ctx,W-5,yy,l.key+" "+l.price.toFixed(2)+suffix,d.theme.tagBg,color,"right",alpha(color,.3))});
