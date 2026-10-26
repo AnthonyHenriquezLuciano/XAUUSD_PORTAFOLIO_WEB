@@ -20,7 +20,7 @@ export default function Strategies() {
   const scen = new Map((s.signals?.strategies || []).map((x: any) => [x.name, x.scenario]));
   return (
     <div className="stack">
-      <PageHead title="Estrategias" />
+      <PageHead title="Estrategias" sub="Configuración, contexto y resultados de cada estrategia del portafolio." />
       <div className="cols-side">
         <Card title="Portafolio" tip="Las ejecuta el EA aunque cierres la web. Riesgo, límite de operaciones y reglas de fondeo están en Ajustes.">
           <div className="strat-list">
