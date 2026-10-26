@@ -3,6 +3,7 @@ import { supabase } from "../lib/supabase";
 import { useApp,fmt } from "../store";
 import { useUI } from "../uiState";
 import { MetricCard } from "../components/DashboardPrimitives";
+import LoadingState from "../components/LoadingState";
 import { summarizeAccount,portfolioTotals, type OwnedAccount,type LiveRow,type StateRow } from "../premium/portfolioRisk";
 const show=(n:number|null) => n==null?"Sin confirmar":"$"+fmt(n);
 export default function PortfolioCockpit(){
@@ -39,12 +40,13 @@ export default function PortfolioCockpit(){
  const rows=useMemo(()=>entries.map(x=>summarizeAccount(x.acc,x.live,x.state,now)),[entries,now]);
  const all=useMemo(()=>portfolioTotals(rows),[rows]);
  const badge=(connected:boolean,blocked:boolean)=><span className={"portfolio-status "+(blocked?"blocked":connected?"ok":"stale")}>{blocked?"Bloqueada":connected?"En línea":"Sin sincronización"}</span>;
- return <div className="premium-center portfolio-page">
+ return <div className="premium-center portfolio-page" aria-busy={loading}>
    <div className="premium-hero"><div><div className="premium-eyebrow">GESTIÓN DE CAPITAL / VISIÓN CONSOLIDADA</div><h1>Gestión de portafolio</h1>
      <p>Exposición agregada y salud del fondeo de todas tus cuentas autorizadas, sin emitir órdenes.</p></div>
      <button className="btn sm" onClick={()=>setVersion(x=>x+1)} disabled={loading}>{loading?"Cargando…":"Sincronizar"}</button>
    </div>
    {error&&<div className="premium-warn">{error}</div>}
+   {loading&&<LoadingState label="Sincronizando cuentas vinculadas…"/>}
    <div className="institutional-metric-grid">
      <MetricCard label="Cuentas vinculadas" value={all.accounts} detail={all.connected+" conectadas recientemente"} evidence="direct"/>
      <MetricCard label="Equity consolidada · USD" value={show(all.equityUsd)} evidence={all.excluded?"estimated":"direct"}
