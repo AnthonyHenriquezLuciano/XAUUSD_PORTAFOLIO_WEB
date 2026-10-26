@@ -140,6 +140,18 @@ export class ChartOverlay implements ISeriesPrimitive<Time> {
       }
     }
     // Banda vertical por franja horaria del centro financiero (sin rangos de precio).
+    // Previous-week anchors are not provided by the legacy levels overlay.
+    // Render them separately from volume estimates; do not duplicate PDH/PDL.
+    if (d.flow && d.flowFocus !== "volume" && d.flowFocus !== "inefficiency") {
+      for (const l of d.flow.levels.filter(x=>x.key==="PWH"||x.key==="PWL")) {
+        const y=this.y(l.price);
+        if (y == null || !Number.isFinite(y) || y<16 || y>H-16) continue;
+        ctx.strokeStyle=alpha("#d8b77f",.55);ctx.lineWidth=1;ctx.setLineDash([6,4]);
+        ctx.beginPath();ctx.moveTo(0,Math.round(y)+.5);ctx.lineTo(W-100,Math.round(y)+.5);ctx.stroke();ctx.setLineDash([]);
+        tags.push({y,draw:(yy)=>pill(ctx,W-5,yy,l.key+" "+l.price.toFixed(2),th.tagBg,"#d8b77f","right",alpha("#d8b77f",.33))});
+      }
+    }
+
     if (d.layers.sesionesReales) {
       for (const z of d.realSessions || []) {
         const x0 = this.x(z.t0), x1 = this.x(z.t1);
