@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { api } from "../api";
 import { fmt, useApp } from "../store";
 import { MetricCard } from "../components/DashboardPrimitives";
+import LoadingState from "../components/LoadingState";
 import type { DataQuality, LevelKey, TargetStudy } from "../research/engine";
 const TARGETS:LevelKey[]=["POC","VAH","VAL","VWAP"];
 const toPct=(p:number|null)=>p==null?"—":(p*100).toFixed(1)+"%";
@@ -30,7 +31,7 @@ export default function ResearchConsole(){
   },[cloud,s.accountInfo?.id,s.barsVersion,target,horizon,stop,refresh]);
   const q=quality,r=study;
   const dataOk=!!q&&q.bars>1400&&!q.invalidOhlc&&q.volumePct>=85;
-  return <div className="premium-center science-page">
+  return <div className="premium-center science-page" aria-busy={busy}>
     <div className="premium-hero">
       <div><div className="premium-eyebrow">ANÁLISIS CUANTITATIVO / CALIDAD DE DATOS</div><h1>Investigación de mercado</h1>
         <p>Investigación reproducible de niveles de XAUUSD, sin convertir correlaciones en promesas de predicción.</p></div>
@@ -40,6 +41,7 @@ export default function ResearchConsole(){
     </div>
     {!cloud&&<div className="premium-warn">Conecta una cuenta MT5 con histórico M1 para ejecutar las evaluaciones. La demo no contiene ticks de volumen reales del bróker y no se fabrican resultados.</div>}
     {error&&<div className="premium-warn">{error}</div>}
+    {busy&&<LoadingState label="Analizando histórico y niveles…"/>}
     <div className="institutional-metric-grid">
       <MetricCard label="Velas M1" value={q?.bars.toLocaleString("es-DO")??"—"} evidence={q?"historical":"unverified"} />
       <MetricCard label="Cobertura de ticks" value={q?q.volumePct.toFixed(1)+"%":"—"}
