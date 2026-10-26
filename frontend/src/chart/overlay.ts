@@ -10,7 +10,8 @@ export type OverlayData = {
   nowT: number;
   atr?: number;
   theme: ChartTheme;
-  layers: { rangos: boolean; niveles: boolean; estrategias: boolean; operaciones: boolean; rr: boolean };
+  layers: { rangos: boolean; sesionesReales: boolean; niveles: boolean; estrategias: boolean; operaciones: boolean; rr: boolean };
+  realSessions?: { id: string; name: string; t0: number; t1: number; color: string }[];
   zones: { name: string; t0: number; t1: number; hi: number; lo: number }[];
   levels: { name: string; price: number; kind: string }[];
   strategies: { name: string; levels?: { buy?: number | null; sell?: number | null } | null }[];
@@ -95,6 +96,22 @@ export class ChartOverlay implements ISeriesPrimitive<Time> {
     const d = this.data;
     if (!d) return;
     const th = d.theme, fillA = th.light ? 0.07 : 0.09;
+    // Banda vertical por franja horaria del centro financiero (sin rangos de precio).
+    if (d.layers.sesionesReales) {
+      for (const z of d.realSessions || []) {
+        const x0 = this.x(z.t0), x1 = this.x(z.t1);
+        if (x0 == null || x1 == null || x1 <= 0 || x0 >= W) continue;
+        const a = Math.max(0, x0), b = Math.min(W, x1);
+        ctx.fillStyle = alpha(z.color, th.light ? .055 : .05);
+        ctx.fillRect(a, 0, Math.max(1, b - a), _H);
+        ctx.setLineDash([3, 7]);
+        ctx.strokeStyle = alpha(z.color, .21);
+        ctx.beginPath();
+        if (x0 >= 0) { ctx.moveTo(Math.round(x0) + .5, 0); ctx.lineTo(Math.round(x0) + .5, _H); }
+        if (x1 <= W) { ctx.moveTo(Math.round(x1) + .5, 0); ctx.lineTo(Math.round(x1) + .5, _H); }
+        ctx.stroke(); ctx.setLineDash([]);
+      }
+    }
     if (d.layers.rangos) {
       for (const z of d.zones) {
         const c = /^Asia/.test(z.name) ? th.zone.asia : /^Tokio/.test(z.name) ? th.zone.tokyo : th.zone.aorb;
@@ -154,6 +171,20 @@ export class ChartOverlay implements ISeriesPrimitive<Time> {
     if (!d) return;
     const th = d.theme;
     const tags: { y: number; draw: (y: number) => void }[] = [];
+
+    if (d.layers.sesionesReales) {
+      for (const z of d.realSessions || []) {
+        const x0 = this.x(z.t0), x1 = this.x(z.t1);
+        if (x0 == null || x1 == null || x1 <= 0 || x0 >= W || x1 - x0 < 65) continue;
+        // Etiqueta independiente en la parte superior; nunca la confundimos con una zona de SL/TP.
+        const left = Math.max(4, x0 + 6);
+        if (left + 88 > W) continue;
+        ctx.font = "600 10px Inter, system-ui, sans-serif";
+        ctx.textBaseline = "top"; ctx.textAlign = "left";
+        ctx.fillStyle = alpha(z.color, .95);
+        ctx.fillText(z.name.replace(" · Asia", ""), left, 12);
+      }
+    }
 
     if (d.layers.rangos) {
       for (const z of d.zones) {
