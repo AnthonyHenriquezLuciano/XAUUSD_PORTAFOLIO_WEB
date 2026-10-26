@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createChart, CrosshairMode, IChartApi, IPriceLine, ISeriesApi, LineStyle, UTCTimestamp } from "lightweight-charts";
 import { ChartOverlay } from "../chart/overlay";
+import { captureViewport, restoreViewport } from "../chart/viewport";
 import { chartSessionWindows } from "../sessions/marketSessions";
 import DrawingTools from "./DrawingTools";
 import { Icon, Logo } from "../icons";
@@ -42,7 +43,7 @@ export default function Chart() {
   const th = themeById(ui.chart.theme);
   const connected = s.status === "conectado";
   const extraRef = useRef<number[]>([]);
-  const reloadRef = useRef(false);
+  const loadedKeyRef = useRef("");
   const stateRef = useRef({ s, ui });
   stateRef.current = { s, ui };
 
@@ -109,11 +110,13 @@ export default function Chart() {
   useEffect(() => {
     try { localStorage.setItem("xauai.tf", tf); } catch { /* sin almacenamiento */ }
     if (!connected || !candleRef.current) {
-      setBarLoad({ phase: "loading", count: 0 });
+      setBarLoad({phase:"loading",count:0});loadedKeyRef.current="";
       return;
     }
     let cancel = false;
-    setBarLoad({ phase: "loading", count: 0 });
+    const datasetKey=[s.broker,s.accountInfo?.id||"sim",tf].join(":");
+    const reset=loadedKeyRef.current!==datasetKey;
+    if(reset)setBarLoad({phase:"loading",count:0});
     api(`/api/bars?tf=${tf}&limit=3000`).then((d) => {
       if (cancel || !candleRef.current) return;
       if (!Array.isArray(d?.bars)) throw new Error("La respuesta del histórico no contiene velas.");
@@ -127,12 +130,19 @@ export default function Chart() {
         || b.low > b.high || b.high < Math.max(b.open,b.close) || b.low > Math.min(b.open,b.close)
         || (i > 0 && Number(b.time) <= Number(bars[i-1].time))
       )) throw new Error("El histórico contiene velas inválidas o tiempos duplicados. Revisa los datos M1.");
+      const chart=chartRef.current;
+      const previous=!reset&&chart?captureViewport(chart,barsRef.current.length):null;
+      const lastLive=lastRef.current;
+      // Keep the most recent in-flight candle while MT5 uploads the closed M1.
+      if(lastLive&&bars.length&&Number(lastLive.time)>Number(bars[bars.length-1].time)&&!reset)
+        bars.push({...lastLive,time:lastLive.time as UTCTimestamp});
       candleRef.current.setData(bars);
-      timesRef.current = bars.map((b: any) => Number(b.time));
-      barsRef.current = bars;
-      lastRef.current = bars.length ? { ...bars[bars.length - 1] } : null;
-      setBarLoad({ phase: bars.length ? "ready" : "empty", count: bars.length });
-      if (bars.length) chartRef.current?.timeScale().fitContent();
+      timesRef.current=bars.map(b=>Number(b.time));
+      barsRef.current=bars;
+      lastRef.current=bars.length?{...bars[bars.length-1]}:null;
+      loadedKeyRef.current=datasetKey;
+      setBarLoad({phase:bars.length?"ready":"empty",count:bars.length});
+      if(chart&&bars.length)restoreViewport(chart,previous,bars.length,reset);
     }).catch((e) => {
       if (cancel) return;
       setBarLoad({phase:"error",count:0,message:e?.message || "No se pudo cargar el histórico."});
@@ -153,18 +163,9 @@ export default function Chart() {
       lastRef.current = { time: bucket, open: t.bid, high: t.bid, low: t.bid, close: t.bid };
       timesRef.current = [...timesRef.current, bucket];
       barsRef.current = [...barsRef.current, lastRef.current];
-      // al cerrar una vela se recargan las velas cerradas (con el simulador acelerado pueden cerrarse varias a la vez)
-      if (!reloadRef.current) {
-        reloadRef.current = true;
-        api(`/api/bars?tf=${tf}&limit=3000`).then((d) => {
-          const bars = d.bars.map((b: any) => ({ ...b, time: b.time as UTCTimestamp }));
-          const cur = lastRef.current;
-          if (cur && bars.length && bars[bars.length - 1].time < cur.time) bars.push({ ...cur, time: cur.time as UTCTimestamp });
-          candleRef.current?.setData(bars);
-          timesRef.current = bars.map((b: any) => Number(b.time));
-          barsRef.current = bars;
-        }).catch(() => {}).finally(() => { reloadRef.current = false; });
-      }
+      // Refresh closed bars through the single synchronized loader. A second
+      // setData()/scrollToRealTime here previously reset manually panned charts.
+      setReload(value=>value+1);
     } else if (bucket === last.time) {
       last.high = Math.max(last.high, t.bid); last.low = Math.min(last.low, t.bid); last.close = t.bid;
     } else return;
@@ -454,6 +455,10 @@ export default function Chart() {
         <button className={`btn sm ${drawOpen ? "on" : ""}`} title="Herramientas de dibujo" aria-pressed={drawOpen}
           onClick={() => { const v = !drawOpen; setDrawOpen(v); try { localStorage.setItem("xauai.drawopen", v ? "1" : "0"); } catch { /* sin almacenamiento */ } }}><Icon name="edit" size={14} />Dibujo</button>
         <div className="spacer" />
+        <button className="btn sm" title="Volver a las velas más recientes sin cambiar la temporalidad"
+          onClick={()=>chartRef.current?.timeScale().scrollToRealTime()}>
+          <Icon name="clock" size={13}/> Actual
+        </button>
         <button className={`btn sm ${ui.showForecast ? "on" : ""}`} onClick={() => ui.setShowForecast(!ui.showForecast)} disabled={!fc} aria-pressed={ui.showForecast} title="Rango histórico estimado; no indica dirección futura">Rango estimado</button>
         {s.sim ? <SimControls /> : null}
       </div>
