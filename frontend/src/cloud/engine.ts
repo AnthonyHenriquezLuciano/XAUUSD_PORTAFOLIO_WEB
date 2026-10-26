@@ -152,6 +152,17 @@ export async function createCloud(accountId: string): Promise<Backend> {
     if (!force && t && t < last + 120) return;
     barBusy = true;
     try {
+      if (!store.length) {
+        // la cuenta aún no tenía velas al abrirla: volver a cargar la ventana completa cuando lleguen
+        await loadBars();
+        if (store && store.length) {
+          emit({ type: "bars", n: store.length });
+          if (status !== "conectado") { status = "conectado"; emit({ type: "status", status }); }
+          updateSignals();
+          autoEvaluate();
+        }
+        return;
+      }
       const d = await rpc("get_bars", { acc: accountId, p_from: last + 60, p_to: null }) as RawBars;
       if (d.ts.length) {
         if (!store.length) await loadBars(); else store.append(d);

@@ -415,6 +415,7 @@ long     g_openTk[];
 long     g_closedPending[];
 int      g_closedTries[];
 long     g_lastBarSrv = -1;      // última vela que tiene la web (-1 = aún no se sabe)
+long     g_barSkip = 0;          // huecos sin velas ya saltados (fines de semana, festivos)
 long     g_settingsTs = 0;
 datetime g_lastSyncOk = 0;
 uint     g_lastSyncMs = 0;
@@ -642,7 +643,8 @@ string BarsJson()
    datetime lastClosed = iTime(_Symbol, PERIOD_M1, 1);
    if(lastClosed <= 0) return "";
    datetime start = (datetime)((long)TimeCurrent() - (long)InpWebHistoryDays * 86400);
-   datetime from = (g_lastBarSrv > 0) ? (datetime)(g_lastBarSrv + 60) : start;
+   long cur = (g_lastBarSrv > g_barSkip) ? g_lastBarSrv : g_barSkip;
+   datetime from = (cur > 0) ? (datetime)(cur + 60) : start;
    if(from < start) from = start;
    int total = iBars(_Symbol, PERIOD_M1);
    if(total <= 1) return "";
@@ -655,9 +657,16 @@ string BarsJson()
    int n = CopyRates(_Symbol, PERIOD_M1, from, to, r);
    if(n <= 0)
      {
-      // sin velas en ese tramo (fin de semana o festivo): saltar el tramo, solo si los datos están sincronizados
-      if(to < lastClosed && SeriesInfoInteger(_Symbol, PERIOD_M1, SERIES_SYNCHRONIZED) && Bars(_Symbol, PERIOD_M1, from, to) == 0)
-         g_lastBarSrv = (long)to;
+      // sin velas en ese tramo (fin de semana o festivo): saltar hasta la siguiente vela que exista
+      if(to < lastClosed)
+        {
+         int sh = iBarShift(_Symbol, PERIOD_M1, from, false);   // vela en 'from' o la anterior
+         if(sh > 0)
+           {
+            datetime nextT = iTime(_Symbol, PERIOD_M1, sh - 1);
+            if(nextT > to) g_barSkip = (long)nextT - 60;           // no hay velas en el tramo: saltarlo
+           }
+        }
       return "";
      }
    string out = "";
@@ -1778,6 +1787,7 @@ int OnInit()
    g_r5Enable      = InpR50_Enable;
    g_autotrade     = InpAutoTrade;
    g_lastBarSrv    = -1;
+   g_barSkip       = 0;
    g_settingsTs    = 0;
    g_backfillQueued = false;
    m_lmOpen  = ParseHM(InpLM_OpenTime);
