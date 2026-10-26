@@ -33,3 +33,6 @@ jobs:
       - name: Validate real sessions and DST
         working-directory: frontend
         run: npm run test:sessions
+      - name: Validate volume profiles and inefficiency without lookahead
+        working-directory: frontend
+        run: npm run test:flow
