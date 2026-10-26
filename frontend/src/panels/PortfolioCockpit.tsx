@@ -39,7 +39,7 @@ export default function PortfolioCockpit(){
  const all=useMemo(()=>portfolioTotals(rows),[rows]);
  const badge=(connected:boolean,blocked:boolean)=><span className={"portfolio-status "+(blocked?"blocked":connected?"ok":"stale")}>{blocked?"Bloqueada":connected?"En línea":"Sin sincronización"}</span>;
  return <div className="premium-center portfolio-page">
-   <div className="premium-hero"><div><div className="premium-eyebrow">PORTFOLIO OS · STAGE 6</div><h1>Multi-Account Risk Radar</h1>
+   <div className="premium-hero"><div><div className="premium-eyebrow">GESTIÓN DE CAPITAL / VISIÓN CONSOLIDADA</div><h1>Gestión de portafolio</h1>
      <p>Exposición agregada y salud del fondeo de todas tus cuentas autorizadas, sin emitir órdenes.</p></div>
      <button className="btn sm" onClick={()=>setVersion(x=>x+1)} disabled={loading}>{loading?"Cargando…":"Sincronizar"}</button>
    </div>
@@ -51,7 +51,7 @@ export default function PortfolioCockpit(){
      <div><span>Exposición restante estimada*</span><b>{show(all.estimatedAvailableUsd)}</b><small>{all.unprotected?"Hay "+all.unprotected+" posición(es) sin riesgo acotado":"Incluye exposición a SL calculable"}</small></div>
    </div>
    <section className="portfolio-list">
-     <div className="portfolio-list-title"><h2>Detalle por cuenta</h2><span>{rows.length} cuenta(s)</span></div>
+     <div className="portfolio-list-title"><h2>Cuentas vinculadas</h2><span>{rows.length} cuenta(s)</span></div>
      {!rows.length&&!loading&&<p className="premium-note">Todavía no tienes cuentas vinculadas con permisos para consultarlas.</p>}
      {rows.map(x=><div className="portfolio-item" key={x.id}>
        <div className="portfolio-item-head"><div><strong>{x.name}</strong><small>{x.server} · {x.currency}</small></div>{badge(x.connected,!!x.blocked)}</div>
@@ -68,7 +68,7 @@ export default function PortfolioCockpit(){
      </div>)}
    </section>
    <section className="portfolio-list">
-     <h2>Exposición y limitaciones</h2>
+     <h2>Alcance de las estimaciones</h2>
      <p className="premium-note">*Son estimaciones de la web, no validaciones del bróker. El patrimonio se agrega sólo si la divisa consta como USD; no se convierte entre monedas. Los stops no contemplan spread futuro, gaps, comisiones ni deslizamiento. Si faltan cotizaciones o hay posiciones no acotadas, el margen neto consolidado se oculta.</p>
      <p className="premium-note">Esta fase habilita supervisión multicuenta. Copiador transaccional, límites de riesgo cruzados e IA autorizadora permanecen bloqueados hasta validar idempotencia de órdenes, ejecución y reglas particulares de cada firma de fondeo.</p>
      <button className="btn sm" onClick={()=>ui.setTab("seguridad")}>Ver conciliación de la cuenta activa</button>
