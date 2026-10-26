@@ -492,15 +492,16 @@ export async function createCloud(accountId: string): Promise<Backend> {
         return { tf: qs.get("tf"), bars: store!.tf(m).slice(-lim) };
       }
       case "GET /api/flow": {
-        if (!store || !store.length) fail("Sin velas M1 para análisis de volumen.");
+        const flowStore = store;
+        if (!flowStore || !flowStore.length) fail("Sin velas M1 para análisis de volumen.");
         const scope = qs.get("scope") || "london";
         const mode = qs.get("mode") || "session";
         if (!["tokyo", "london", "newyork", "day"].includes(scope) ||
             !["session", "fixed", "recent"].includes(mode)) fail("Selección de perfil no válida.");
-        const last = store.ts[store.length - 1] + 59;
+        const last = flowStore.ts[flowStore.length - 1] + 59;
         // El corte jamás puede superar la última vela disponible.
         const cutoff = Math.min(last, k?.time || last, Number(qs.get("cutoff") || last));
-        return buildFlow(store, last, {
+        return buildFlow(flowStore, last, {
           mode: mode as "session" | "fixed" | "recent",
           scope: scope as "tokyo" | "london" | "newyork" | "day",
           start: qs.has("start") ? Number(qs.get("start")) : undefined,
