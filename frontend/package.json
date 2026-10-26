@@ -12,7 +12,8 @@
     "test:risk": "node test/validate_risk.mjs",
     "test:commands": "node test/validate_commands.mjs",
     "test:research": "node test/validate_research.mjs",
-    "test:release": "npm run build && npm run test:sessions && npm run test:flow && npm run test:risk && npm run test:commands && npm run test:research"
+    "test:portfolio": "node test/validate_portfolio.mjs",
+    "test:release": "npm run build && npm run test:sessions && npm run test:flow && npm run test:risk && npm run test:commands && npm run test:research && npm run test:portfolio"
   },
   "dependencies": {
     "@fontsource/ibm-plex-mono": "^5.1.1",
