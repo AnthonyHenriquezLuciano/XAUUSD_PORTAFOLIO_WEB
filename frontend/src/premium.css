@@ -146,3 +146,49 @@ body { background: radial-gradient(ellipse 80% 48% at 60% -20%, #242017 0%, var(
 .premium-inline-label { display:flex; align-items:center; gap:7px; color:var(--muted); font-size:11px; }
 .premium-inline-label select { font-size:11px; padding:5px; }
 @media(max-width:620px) { .premium-candle-chart { height:245px; } }
+
+
+/* -------------------------------------------------- REAL MARKET SESSIONS */
+.sessions-page { gap:18px; }
+.sessions-settings { display:flex; flex-wrap:wrap; align-items:center; gap:14px 24px; background:linear-gradient(100deg,#15171a,#111315); border:1px solid var(--line); border-radius:13px; padding:16px 20px; }
+.sessions-settings>label:first-child { display:flex; align-items:center; gap:12px; color:var(--muted); font-size:12px; }
+.sessions-settings select { min-width:200px; }
+.sessions-switch { display:flex; align-items:center; gap:9px; color:var(--text); cursor:pointer; font-size:12px; }
+.sessions-status-line { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-left:auto; font-size:11px; }
+.sessions-overlap { color:var(--gold-hi); border:1px solid rgba(191,148,82,.35); border-radius:20px; padding:5px 10px; }
+.sessions-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; }
+.session-card { border:1px solid var(--line); border-top:3px solid var(--gold); border-radius:14px; padding:19px; background:linear-gradient(155deg,#1a1c1f,#101215); display:flex; flex-direction:column; gap:13px; min-width:0; transition:border-color .2s,transform .2s; }
+.session-card.is-active { border-color:rgba(205,169,110,.45); box-shadow:0 0 34px rgba(191,148,82,.055); }
+.session-card:hover { transform:translateY(-2px); }
+.session-card-top { display:flex; justify-content:space-between; align-items:center; }
+.session-mark { font:28px/1 serif; }
+.session-chip { font-size:9px; font-weight:650; letter-spacing:.8px; padding:5px 9px; border:1px solid var(--line2); color:var(--dim); border-radius:30px; }
+.session-chip.is-active { color:var(--buy); border-color:rgba(22,176,122,.4); background:rgba(22,176,122,.09); }
+.session-card h2 { font-size:20px; font-weight:650; margin:0; }
+.session-card>p { font-size:11.5px; line-height:1.55; color:var(--muted); min-height:34px; margin:0; }
+.session-hours { border-top:1px solid var(--line); display:flex; flex-direction:column; gap:13px; padding:15px 0 0; }
+.session-hours>div { display:flex; flex-direction:column; gap:3px; }
+.session-hours span,.session-countdown span { font-size:11px; color:var(--muted); }
+.session-hours strong { font:600 13px/1.5 var(--mono); }
+.session-countdown { background:#0c0e11; border:1px solid var(--line); border-radius:9px; display:flex; align-items:center; justify-content:space-between; padding:11px 13px; }
+.session-countdown strong { font:650 19px var(--mono); color:var(--gold-hi); letter-spacing:.2px; }
+.session-card-foot { margin-top:auto; display:flex; justify-content:space-between; gap:10px; color:var(--dim); font-size:10px; }
+.session-section { border:1px solid var(--line); border-radius:13px; background:linear-gradient(160deg,#17191d,#111316); padding:20px 22px; }
+.session-section h2 { font-size:16px; margin:0 0 5px; }
+.session-section-head { display:flex; justify-content:space-between; align-items:center; gap:15px; flex-wrap:wrap; margin-bottom:20px; }
+.session-section-head p { font-size:11.5px; color:var(--muted); margin:0; }
+.session-section-head>span { font-size:11px; color:var(--gold-hi); font-weight:600; }
+.session-timeline { display:flex; flex-direction:column; gap:10px; }
+.session-axis { display:flex; justify-content:space-between; margin-left:118px; font-size:10px; color:var(--muted); }
+.session-lane { display:grid; grid-template-columns:105px minmax(0,1fr); gap:13px; align-items:center; }
+.session-lane>b { font-size:11px; white-space:nowrap; }
+.session-lane-track { position:relative; height:26px; border-radius:5px; background:#0a0d10; border:1px solid var(--line); overflow:hidden; }
+.session-guide { position:absolute; top:0; height:100%; width:1px; z-index:1; background:rgba(255,255,255,.09); pointer-events:none; }
+.session-interval { position:absolute; top:4px; bottom:4px; border-radius:4px; opacity:.85; }
+.sessions-comparison { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin:18px 0; }
+.sessions-comparison>div { background:#101316; border:1px solid var(--line); border-radius:9px; padding:15px; }
+.sessions-comparison b { font-size:12px; color:var(--gold-hi); }
+.sessions-comparison p { color:var(--muted); font-size:12px; line-height:1.6; }
+@media(max-width:1130px) { .sessions-grid { grid-template-columns:1fr; } .session-card>p { min-height:0; } }
+@media(max-width:700px) { .sessions-settings { align-items:stretch; flex-direction:column; padding:13px; } .sessions-settings>label:first-child { flex-direction:column; align-items:stretch; } .sessions-status-line { margin-left:0; } .sessions-comparison { grid-template-columns:1fr; } .session-card { padding:14px; } .session-section { padding:14px; } }
+@media(prefers-reduced-motion:reduce) { .session-card { transition:none; } .session-card:hover { transform:none; } }

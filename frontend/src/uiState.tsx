@@ -26,7 +26,7 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
   const [tab, setTab] = useState("centro");
   const [accountOpen, setAccountOpen] = useState(false);
   const [layers, setLayers] = useState<Record<string, boolean>>(() => {
-    const def = { niveles: true, rangos: true, estrategias: true, operaciones: true };
+    const def = { niveles: true, rangos: true, sesionesReales: true, estrategias: true, operaciones: true };
     try { return { ...def, ...JSON.parse(localStorage.getItem("xauai.layers") || "{}") }; } catch { return def; }
   });
   const setLayer = (k: string, v: boolean) => setLayers((l) => {

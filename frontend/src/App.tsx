@@ -6,6 +6,7 @@ import { Icon } from "./icons";
 import Journal from "./panels/Journal";
 import Settings from "./panels/Settings";
 import Signals from "./panels/Signals";
+import RealSessions from "./panels/RealSessions";
 import Stats from "./panels/Stats";
 import Strategies from "./panels/Strategies";
 import Trade from "./panels/Trade";
@@ -20,6 +21,7 @@ const NAV: [string, string, string][] = [
   ["centro", "Centro", "home"],
   ["operar", "Operar", "trade"],
   ["mercado", "Mercado", "market"],
+  ["sesiones", "Sesiones", "clock"],
   ["diario", "Diario", "journal"],
   ["stats", "Estadísticas", "stats"],
   ["estrategias", "Estrategias", "strategies"],
@@ -35,7 +37,7 @@ export default function App({ signedIn, onExitSim }: { signedIn: boolean; onExit
   const [logOpen, setLogOpen] = useState(false);
   const view = NAV.some(([k]) => k === ui.tab) ? ui.tab : "operar";
   const withChart = CHART_VIEWS.has(view);
-  const page = { centro: <CommandCenter alerts={alerts} />, lab: <PremiumLab />, diario: <Journal />, stats: <Stats />, estrategias: <Strategies />, ajustes: <Settings /> }[view as "centro" | "lab" | "diario" | "stats" | "estrategias" | "ajustes"];
+  const page = { centro: <CommandCenter alerts={alerts} />, sesiones: <RealSessions />, lab: <PremiumLab />, diario: <Journal />, stats: <Stats />, estrategias: <Strategies />, ajustes: <Settings /> }[view as "centro" | "sesiones" | "lab" | "diario" | "stats" | "estrategias" | "ajustes"];
   return (
     <div className={`app ${withChart ? "v-chart" : "v-page"}`}>
       <Header onExitSim={onExitSim} />
