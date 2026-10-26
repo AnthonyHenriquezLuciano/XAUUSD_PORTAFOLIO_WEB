@@ -18,13 +18,6 @@ import PortfolioCockpit from "./panels/PortfolioCockpit";
 import ResearchConsole from "./panels/ResearchConsole";
 import PremiumLab from "./panels/PremiumLab";
 import { useSmartAlerts } from "./premium/useSmartAlerts";
-import "./premium.css";
-import "./flow/flow.css";
-import "./design-system.css";
-import "./navigation.css";
-import "./workspace.css";
-import "./dashboard.css";
-import "./polish.css";
 import { tstr, useApp } from "./store";
 import { useUI } from "./uiState";
 

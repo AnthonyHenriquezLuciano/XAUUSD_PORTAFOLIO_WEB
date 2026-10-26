@@ -380,7 +380,12 @@ table.t td .dim { font-size: 11.5px; }
 .copy-row .tag { margin-left: 8px; }
 
 /* ----------------------------------------------------------------- gráfico */
-.chartwrap { position: relative; display: grid; grid-template-rows: auto 1fr; min-width: 0; min-height: 0; }
+/* Terminal has 3 concrete rows: instrument, controls, and resizable plot.
+   Keep this base rule consistent with workspace.css as defense in depth. */
+.chartwrap { position: relative; display: grid; grid-template-rows: auto auto minmax(0, 1fr); grid-template-areas: "instrument" "controls" "canvas"; min-width: 0; min-height: 0; overflow: hidden; }
+.chartwrap > .terminal-strip { grid-area: instrument; }
+.chartwrap > .toolbar { grid-area: controls; }
+.chartwrap > .chart { grid-area: canvas; min-height: 0; min-width: 0; overflow: hidden; }
 .toolbar { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--line); background: var(--panel); flex-wrap: wrap; }
 .toolbar .seg button { padding: 4px 9px; font-size: 12px; }
 .chart { position: relative; min-height: 0; }
