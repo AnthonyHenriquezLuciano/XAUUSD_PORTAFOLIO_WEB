@@ -138,3 +138,11 @@ body { background: radial-gradient(ellipse 80% 48% at 60% -20%, #242017 0%, var(
 .premium-lab-card input[type=range] { width:100%; accent-color:var(--gold); }
 @media(max-width:820px) { .premium-lab-inputs { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 @media(max-width:620px) { .premium-lab-card { padding:15px; } .premium-shadow { grid-template-columns:1fr; } .premium-shadow>div:last-child { align-items:start; } }
+
+
+.premium-candle { display:flex; flex-direction:column; gap:12px; border:1px solid var(--line); border-radius:12px; padding:12px; background:#101215; }
+.premium-candle-chart { width:100%; height:340px; border-radius:9px; overflow:hidden; }
+.premium-candle .premium-actions { width:100%; }
+.premium-inline-label { display:flex; align-items:center; gap:7px; color:var(--muted); font-size:11px; }
+.premium-inline-label select { font-size:11px; padding:5px; }
+@media(max-width:620px) { .premium-candle-chart { height:245px; } }
