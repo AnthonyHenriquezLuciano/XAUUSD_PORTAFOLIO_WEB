@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "test:sessions": "node test/validate_sessions.mjs"
+    "test:sessions": "node test/validate_sessions.mjs",
+    "test:flow": "node test/validate_flow.mjs"
   },
   "dependencies": {
     "@fontsource/ibm-plex-mono": "^5.1.1",

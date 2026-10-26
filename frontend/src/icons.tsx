@@ -4,6 +4,7 @@ import React from "react";
 const P: Record<string, string> = {
   home: "M3 9.5L10 3l7 6.5V17H3V9.5zM8 17v-5h4v5",
   clock: "M10 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16zM10 5v5l3 2",
+  flow: "M3 4v12M4 5h11M4 8h7M4 11h13M4 14h5M16 5v3M12 12v4",
   lab: "M7 3h6M9 3v6l-5 7a2 2 0 0 0 1.7 2.5h8.6A2 2 0 0 0 16 16l-5-7V3M7 13h6",
   trade: "M5 4v12M5 7h-1.5v5H5M10 3v14M10 6H8.5v7H10M15 5v10M15 8h-1.5v4H15",
   market: "M3 15l4-5 3 3 4-6 3 4M3 17h14",

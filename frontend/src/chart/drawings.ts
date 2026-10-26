@@ -3,13 +3,13 @@
 import type { IChartApi, ISeriesApi, ISeriesPrimitive, ISeriesPrimitivePaneRenderer, ISeriesPrimitivePaneView, ITimeScaleApi, Logical, SeriesAttachedParameter, Time } from "lightweight-charts";
 import { alpha, ChartTheme } from "./themes";
 
-export type Kind = "hline" | "hray" | "vline" | "trend" | "ray" | "rect" | "fib" | "text";
+export type Kind = "hline" | "hray" | "vline" | "trend" | "ray" | "rect" | "profile" | "fib" | "text";
 export type Tool = "cursor" | Kind | "measure";
 export type Pt = { t: number; p: number };
 export type Drawing = { id: string; kind: Kind; a: Pt; b?: Pt; text?: string; color: string; width: number; dash?: boolean };
 export type Handle = "a" | "b" | "ab" | "ba" | "body";
 
-export const TWO_POINTS: Tool[] = ["trend", "ray", "rect", "fib", "measure"];
+export const TWO_POINTS: Tool[] = ["trend", "ray", "rect", "profile", "fib", "measure"];
 export const COLORS = ["#e0b04f", "#4c8dff", "#22b07d", "#e5534b", "#b07cff", "#8a93a6"];
 export const FIB = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
 
@@ -121,7 +121,7 @@ export class DrawingsPrimitive implements ISeriesPrimitive<Time> {
       const xb = this.x(d.b.t), yb = this.y(d.b.p);
       if (xb != null && yb != null) {
         out.push({ h: "b", x: xb, y: yb });
-        if (d.kind === "rect") { out.push({ h: "ab", x: xa, y: yb }); out.push({ h: "ba", x: xb, y: ya }); }
+        if (d.kind === "rect" || d.kind === "profile") { out.push({ h: "ab", x: xa, y: yb }); out.push({ h: "ba", x: xb, y: ya }); }
       }
     }
     return out;
@@ -158,7 +158,7 @@ export class DrawingsPrimitive implements ISeriesPrimitive<Time> {
     if (xb == null || yb == null) return null;
     if (d.kind === "trend") return segDist(px, py, xa, ya, xb, yb);
     if (d.kind === "ray") { const [x2, y2] = this.extend(xa, ya, xb, yb); return segDist(px, py, xa, ya, x2, y2); }
-    if (d.kind === "rect") {
+    if (d.kind === "rect" || d.kind === "profile") {
       const x0 = Math.min(xa, xb), x1 = Math.max(xa, xb), y0 = Math.min(ya, yb), y1 = Math.max(ya, yb);
       if (px >= x0 && px <= x1 && py >= y0 && py <= y1) return Math.min(4, px - x0, x1 - px, py - y0, y1 - py);
       return Math.min(segDist(px, py, x0, y0, x1, y0), segDist(px, py, x0, y1, x1, y1), segDist(px, py, x0, y0, x0, y1), segDist(px, py, x1, y0, x1, y1));
@@ -223,10 +223,11 @@ export class DrawingsPrimitive implements ISeriesPrimitive<Time> {
       } else if (xb != null && yb != null) {
         if (d.kind === "trend") line(xa, ya, xb, yb);
         else if (d.kind === "ray") { const [x2, y2] = this.extend(xa, ya, xb, yb); line(xa, ya, x2, y2); }
-        else if (d.kind === "rect") {
+        else if (d.kind === "rect" || d.kind === "profile") {
           const x0 = Math.min(xa, xb), y0 = Math.min(ya, yb), w = Math.abs(xb - xa), h = Math.abs(yb - ya);
-          ctx.fillStyle = alpha(c, 0.13); ctx.fillRect(x0, y0, w, h);
+          ctx.fillStyle = alpha(c, d.kind === "profile" ? .06 : .13); ctx.fillRect(x0, y0, w, h);
           ctx.strokeRect(Math.round(x0) + 0.5, Math.round(y0) + 0.5, Math.round(w), Math.round(h));
+          if (d.kind === "profile") { ctx.font = FONT; ctx.fillStyle = c; ctx.textAlign = "left"; ctx.textBaseline = "top"; ctx.fillText("VP · Rango fijo", x0 + 5, y0 + 4); }
           if (d.text) { ctx.font = FONT; ctx.fillStyle = c; ctx.textBaseline = "top"; ctx.textAlign = "left"; ctx.fillText(d.text, x0 + 4, y0 + 3); }
         } else if (d.kind === "fib" && d.b) {
           const x0 = Math.min(xa, xb);
