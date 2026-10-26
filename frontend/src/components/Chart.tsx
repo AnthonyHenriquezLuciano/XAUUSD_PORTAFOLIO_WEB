@@ -55,7 +55,9 @@ export default function Chart() {
       crosshair: { mode: CrosshairMode.Normal },
       rightPriceScale: { borderColor: "#262e3f", scaleMargins: { top: 0.08, bottom: 0.08 } },
       timeScale: { borderColor: "#262e3f", timeVisible: true, secondsVisible: false, rightOffset: 12 },
-      // Size is controlled explicitly by ResizeObserver so a previously collapsed\n      // grid track cannot leave the chart with a permanent 0px canvas.\n      autoSize: false,
+      // Size is controlled explicitly by ResizeObserver so a previously collapsed
+      // grid track cannot leave the chart with a permanent 0px canvas.
+      autoSize: false,
       localization: { locale: "es-ES", priceFormatter: (p: number) => p.toFixed(2) },
     });
     const candle = chart.addCandlestickSeries({
@@ -420,7 +422,8 @@ export default function Chart() {
           <span className="terminal-symbol">XAUUSD</span>
           <span className="terminal-divider" />
           <span className="terminal-market-label">Oro / dólar estadounidense</span>
-          <span className="terminal-tf">{tf}</span>\n          {barLoad.phase === "ready" && <span className="terminal-bar-count" title="Velas de esta temporalidad">{barLoad.count.toLocaleString("es-ES")} velas</span>}
+          <span className="terminal-tf">{tf}</span>
+          {barLoad.phase === "ready" && <span className="terminal-bar-count" title="Velas de esta temporalidad">{barLoad.count.toLocaleString("es-ES")} velas</span>}
         </div>
         <div className="terminal-utility">
           <span className={`terminal-connect ${connected ? "online" : ""}`}>
