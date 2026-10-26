@@ -3,6 +3,7 @@
 import { emit, type Backend } from "../api";
 import { BarStore, dayOf, DailyBars, RawBars } from "../ai/bars";
 import { buildFlow } from "../flow/engine";
+import { inspectBars, studyTargets, type LevelKey } from "../research/engine";
 import { computeFeatures, FeatTable } from "../ai/features";
 import { loadModels, Models, predictEntry, scenGet, labelRegime, labelVol } from "../ai/model";
 import { evaluateTrade, featAt, marketState, zonesAt } from "../ai/analytics";
@@ -512,6 +513,19 @@ export async function createCloud(accountId: string): Promise<Backend> {
         const m = TFM[qs.get("tf") || "M5"] || 5;
         const lim = Number(qs.get("limit") || 3000);
         return { tf: qs.get("tf"), bars: store!.tf(m).slice(-lim) };
+      }
+      case "GET /api/data_quality": {
+        if (!store) throw new Error("Aún no hay historial M1 sincronizado.");
+        return inspectBars(store);
+      }
+      case "GET /api/target_study": {
+        if (!store) throw new Error("Sin histórico M1 para investigación.");
+        const level = qs.get("level") || "POC";
+        if (!["POC","VAH","VAL","VWAP"].includes(level)) fail("Nivel no admitido");
+        const horizon = Number(qs.get("horizon") || 120);
+        const stop = Number(qs.get("stop") || 1.5);
+        if (!Number.isFinite(horizon)||!Number.isFinite(stop) || horizon<30 || horizon>480 || stop<.5||stop>4) fail("Parámetros de investigación no válidos.");
+        return studyTargets(store, level as LevelKey, horizon, stop, 1000);
       }
       case "GET /api/flow": {
         const flowStore = store;
