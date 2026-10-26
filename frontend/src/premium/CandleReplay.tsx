@@ -63,11 +63,12 @@ export default function CandleReplay() {
   }, [bars, index]);
 
   useEffect(() => {
+    if (bars.length && index >= bars.length - 1) setPlaying(false);
+  }, [index, bars.length]);
+
+  useEffect(() => {
     if (!playing || !bars.length) return;
-    const timer = setInterval(() => setIndex(i => {
-      if (i >= bars.length - 1) { setPlaying(false); return i; }
-      return i + 1;
-    }), speed);
+    const timer = setInterval(() => setIndex(i => Math.min(bars.length - 1, i + 1)), speed);
     return () => clearInterval(timer);
   }, [playing, speed, bars.length]);
 
