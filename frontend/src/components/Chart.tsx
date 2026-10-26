@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createChart, CrosshairMode, IChartApi, IPriceLine, ISeriesApi, LineStyle, UTCTimestamp } from "lightweight-charts";
 import { ChartOverlay } from "../chart/overlay";
+import { chartSessionWindows } from "../sessions/marketSessions";
 import DrawingTools from "./DrawingTools";
 import { Icon, Logo } from "../icons";
 import { alpha, themeById } from "../chart/themes";
@@ -205,9 +206,20 @@ export default function Chart() {
     if (!ov) return;
     const fc = ui.showForecast && s.signals?.forecast?.points?.length ? s.signals.forecast : null;
     const last = lastRef.current?.time ?? s.tick?.time ?? 0;
+    const chartTimes = timesRef.current;
+    const brokerOffset = s.broker === "cloud" && s.news_offset != null ? Number(s.news_offset) : null;
+    const realSessions = ui.layers.sesionesReales !== false && brokerOffset != null &&
+      Number.isFinite(brokerOffset) && Math.abs(brokerOffset) <= 15 * 3600 && chartTimes.length
+      ? chartSessionWindows(
+          Math.max(chartTimes[0], chartTimes[chartTimes.length - 1] - 20 * 86400),
+          chartTimes[chartTimes.length - 1] + 86400,
+          brokerOffset
+        )
+      : [];
     ov.setData({
       tf: TF_SEC[tf], times: () => timesRef.current, nowT: last, atr: s.signals?.atr, theme: th,
-      layers: { rangos: !!ui.layers.rangos, niveles: !!ui.layers.niveles, estrategias: !!ui.layers.estrategias, operaciones: !!ui.layers.operaciones, rr: ui.chart.rr },
+      layers: { rangos: !!ui.layers.rangos, sesionesReales: ui.layers.sesionesReales !== false, niveles: !!ui.layers.niveles, estrategias: !!ui.layers.estrategias, operaciones: !!ui.layers.operaciones, rr: ui.chart.rr },
+      realSessions,
       zones: overlays?.zones || [], levels: s.signals?.levels || [], strategies: s.strategies || [],
       trades: trades.filter((t) => t.status !== "abierta"), positions: s.positions,
       preview: ui.preview ? { side: ui.preview.side, entry: ui.preview.entry, sl: ui.preview.sl, tp: ui.preview.tp } : null,
@@ -216,7 +228,7 @@ export default function Chart() {
         .map((n: any) => ({ t: n.ts + (s.news_offset ?? 7200), title: n.title, impact: n.impact })),
       newsWindow: s.settings?.extra?.news_enabled ? { before: Number(s.settings.extra.news_before || 0), after: Number(s.settings.extra.news_after || 0) } : null,
     });
-  }, [th.id, tf, overlays, s.signals, s.strategies, trades, s.positions, ui.preview, ui.layers, ui.chart.rr, ui.showForecast, s.barsVersion, s.news, s.settings?.extra, lastRef.current?.time, s.tick?.time ? Math.floor(s.tick.time / 30) : 0]);
+  }, [th.id, tf, overlays, s.signals, s.strategies, trades, s.positions, ui.preview, ui.layers, ui.chart.rr, ui.showForecast, s.barsVersion, s.news, s.news_offset, s.settings?.extra, lastRef.current?.time, s.tick?.time ? Math.floor(s.tick.time / 30) : 0]);
 
   useEffect(() => {
     const c = candleRef.current;
@@ -346,13 +358,14 @@ export default function Chart() {
           <button className={`btn sm ${layersOpen ? "on" : ""}`} onClick={() => setLayersOpen(!layersOpen)} aria-expanded={layersOpen}>Capas <Icon name="chevron" size={13} /></button>
           {layersOpen ? (
             <div className="layers-menu" onMouseLeave={() => setLayersOpen(false)}>
-              {([["rangos", "Rangos de sesión", th.zone.asia], ["niveles", "Niveles clave", th.level.pd], ["estrategias", "Órdenes de las estrategias", th.buy], ["operaciones", "Operaciones (entrada → salida)", th.win], ["noticias", "Noticias USD", th.sl]] as [string, string, string][]).map(([k, l, c]) => (
+              {([["rangos", "Rangos del EA (ALB/TOK/AORB)", th.zone.asia], ["sesionesReales", "Sesiones reales (Tokio/Londres/NY)", "#d8ad61"], ["niveles", "Niveles clave", th.level.pd], ["estrategias", "Órdenes de las estrategias", th.buy], ["operaciones", "Operaciones (entrada → salida)", th.win], ["noticias", "Noticias USD", th.sl]] as [string, string, string][]).map(([k, l, c]) => (
                 <label key={k} className="layer-item"><input type="checkbox" checked={ui.layers[k] !== false} onChange={(e) => ui.setLayer(k, e.target.checked)} /><i style={{ background: c }} />{l}</label>
               ))}
               <label className="layer-item"><input type="checkbox" checked={ui.chart.rr} onChange={(e) => ui.setChart({ rr: e.target.checked })} /><i style={{ background: th.tp }} />Zonas de riesgo / beneficio</label>
             </div>
           ) : null}
         </div>
+        <button className="btn sm" title="Horarios reales de Tokio, Londres y Nueva York" onClick={() => ui.setTab("sesiones")}>Sesiones reales</button>
         <button className={`btn sm ${drawOpen ? "on" : ""}`} title="Herramientas de dibujo" aria-pressed={drawOpen}
           onClick={() => { const v = !drawOpen; setDrawOpen(v); try { localStorage.setItem("xauai.drawopen", v ? "1" : "0"); } catch { /* sin almacenamiento */ } }}><Icon name="edit" size={14} />Dibujo</button>
         <div className="spacer" />
