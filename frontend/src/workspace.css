@@ -1,5 +1,10 @@
 /* Stage 3 · Trading Terminal Workspace */
-.chartwrap{grid-template-rows:auto auto minmax(0,1fr);background:#0d1115}
+/* Specific grid areas prevent a wrapped toolbar from consuming the plot row.
+   Fixed heights are reserved for metadata and controls; all remaining space is the chart. */
+.chartwrap{grid-template-rows:min-content min-content minmax(0,1fr);grid-template-areas:"instrument" "controls" "canvas";height:100%;background:#0d1115;overflow:hidden}
+.chartwrap>.terminal-strip{grid-area:instrument;align-self:stretch}
+.chartwrap>.toolbar{grid-area:controls;align-self:start;justify-self:stretch;min-height:44px}
+.chartwrap>.chart{grid-area:canvas;min-height:0;min-width:0;overflow:hidden}
 .terminal-strip{display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0;min-height:45px;padding:9px 14px;
   border-bottom:1px solid #2D343C;background:linear-gradient(90deg,#1B2127,#12171C)}
 .terminal-identity,.terminal-utility{display:flex;align-items:center;gap:11px;min-width:0}
@@ -64,3 +69,15 @@
  .chartwrap{height:60vh;min-height:370px}
  .desk-heading h2{font-size:16px}
 }
+
+.terminal-bar-count{font:500 10px var(--mono);color:var(--muted);white-space:nowrap}
+.chart-data-state{position:absolute;inset:0;z-index:7;display:flex;flex-direction:column;gap:12px;
+  align-items:center;justify-content:center;text-align:center;padding:28px;
+  background:linear-gradient(150deg,#10161cee,#111923f7);color:#A6B4C1}
+.chart-data-state strong{font-size:15px;color:#F0EEE7;letter-spacing:-.025em}
+.chart-data-state>span:not(.chart-data-spinner){font-size:12px;max-width:380px;line-height:1.7}
+.chart-data-state svg{color:var(--warn)}
+.chart-data-state .btn{border-color:rgba(200,170,120,.4);color:var(--gold-hi)}
+.chart-data-spinner{width:26px;height:26px;border:2px solid #354450;border-top-color:var(--gold);border-radius:50%;animation:chart-load .8s linear infinite}
+@keyframes chart-load{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.chart-data-spinner{animation:none;border-top-color:var(--gold)}}
