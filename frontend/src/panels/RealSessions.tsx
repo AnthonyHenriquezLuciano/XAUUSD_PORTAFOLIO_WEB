@@ -27,7 +27,7 @@ export default function RealSessions() {
   }, []);
   const brokerOffset = s.broker === "cloud" && s.news_offset != null ? Number(s.news_offset) : null;
   const selectedZone = zone === "broker" && brokerOffset == null ? "rd" : zone;
-  const status = useMemo(() => sessionStatus(now), [Math.floor(now / 1000)]);
+  const status = useMemo(() => sessionStatus(now), [Math.floor(now / 60000)]);
   const active = status.filter(x => x.active);
   const next = status.filter(x => !x.active && x.window).sort((a, b) => (a.window?.openUtcMs || 0) - (b.window?.openUtcMs || 0))[0];
   const fmt = (ms: number, date = false) => formatSessionTime(ms, selectedZone, brokerOffset, date);
