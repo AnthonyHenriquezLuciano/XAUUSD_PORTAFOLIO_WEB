@@ -23,6 +23,7 @@ export default function Chart() {
   const el = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
+  const volumeRef = useRef<ISeriesApi<"Histogram"> | null>(null);
   const fcRef = useRef<ISeriesApi<"Line">[]>([]);
   const overlayRef = useRef<ChartOverlay | null>(null);
   const timesRef = useRef<number[]>([]);
@@ -74,6 +75,12 @@ export default function Chart() {
     });
     chartRef.current = chart;
     candleRef.current = candle;
+    const volume = chart.addHistogramSeries({
+      priceScaleId:"tick-activity",priceLineVisible:false,lastValueVisible:false,
+      priceFormat:{type:"volume"},color:"#6f9a87",
+    });
+    chart.priceScale("tick-activity").applyOptions({scaleMargins:{top:.79,bottom:0},visible:false});
+    volumeRef.current = volume;
     const ov = new ChartOverlay();
     candle.attachPrimitive(ov);
     overlayRef.current = ov;
@@ -101,7 +108,7 @@ export default function Chart() {
     return () => {
       observer.disconnect();
       if (pendingFrame) cancelAnimationFrame(pendingFrame);
-      chart.remove(); chartRef.current = null; candleRef.current = null;
+      chart.remove(); chartRef.current = null; candleRef.current = null; volumeRef.current = null;
       linesRef.current.clear();
     };
   }, []);
@@ -123,7 +130,7 @@ export default function Chart() {
       const bars = d.bars.map((b: any) => ({
         time: Number(b.time) as UTCTimestamp,
         open: Number(b.open), high: Number(b.high),
-        low: Number(b.low), close: Number(b.close),
+        low: Number(b.low), close: Number(b.close), volume: Number(b.volume || 0),
       }));
       if (bars.some((b: any, i: number) =>
         !Number.isFinite(Number(b.time)) || ![b.open,b.high,b.low,b.close].every(Number.isFinite)
@@ -137,6 +144,9 @@ export default function Chart() {
       if(lastLive&&bars.length&&Number(lastLive.time)>Number(bars[bars.length-1].time)&&!reset)
         bars.push({...lastLive,time:lastLive.time as UTCTimestamp});
       candleRef.current.setData(bars);
+      volumeRef.current?.setData(bars.filter(b=>b.volume>0&&Number.isFinite(b.volume))
+        .map(b=>({time:b.time,value:b.volume,
+          color:b.close>=b.open?"rgba(65,174,136,.45)":"rgba(213,96,100,.45)"})));
       timesRef.current=bars.map(b=>Number(b.time));
       barsRef.current=bars;
       lastRef.current=bars.length?{...bars[bars.length-1]}:null;
@@ -258,9 +268,10 @@ export default function Chart() {
       rightPriceScale: { borderColor: th.border }, timeScale: { borderColor: th.border },
     });
     c.applyOptions({ upColor: hollow ? th.bg : th.up, downColor: th.down, borderUpColor: th.up, borderDownColor: th.down, wickUpColor: th.wickUp, wickDownColor: th.wickDown });
+    volumeRef.current?.applyOptions({visible:ui.layers.volumen!==false});
     const [lo, md, hi] = fcRef.current;
     lo?.applyOptions({ color: alpha(th.forecast, 0.7) }); hi?.applyOptions({ color: alpha(th.forecast, 0.7) }); md?.applyOptions({ color: th.forecast });
-  }, [th.id, ui.chart.candles, ui.chart.grid]);
+  }, [th.id, ui.chart.candles, ui.chart.grid, ui.layers.volumen]);
 
   // ------------------------------------------------------------------ capa de dibujo (rangos, niveles, estrategias, operaciones)
   useEffect(() => {
@@ -443,7 +454,7 @@ export default function Chart() {
           <button className={`btn sm ${layersOpen ? "on" : ""}`} onClick={() => setLayersOpen(!layersOpen)} aria-expanded={layersOpen}>Capas <Icon name="chevron" size={13} /></button>
           {layersOpen ? (
             <div className="layers-menu" onMouseLeave={() => setLayersOpen(false)}>
-              {([["rangos", "Rangos del EA (ALB/TOK/AORB)", th.zone.asia], ["sesionesReales", "Sesiones reales (Tokio/Londres/NY)", "#d8ad61"], ["flujo", "Perfil de volumen y POC", "#e5bf7c"], ["fvg", "Ineficiencias FVG", "#16b07a"], ["niveles", "Niveles clave", th.level.pd], ["estrategias", "Órdenes de las estrategias", th.buy], ["operaciones", "Operaciones (entrada → salida)", th.win], ["noticias", "Noticias USD", th.sl]] as [string, string, string][]).map(([k, l, c]) => (
+              {([["volumen", "Actividad de ticks (histograma por vela)", "#72af94"], ["rangos", "Rangos del EA (ALB/TOK/AORB)", th.zone.asia], ["sesionesReales", "Sesiones reales (Tokio/Londres/NY)", "#d8ad61"], ["flujo", "Perfil de volumen y POC", "#e5bf7c"], ["fvg", "Ineficiencias FVG", "#16b07a"], ["niveles", "Niveles clave", th.level.pd], ["estrategias", "Órdenes de las estrategias", th.buy], ["operaciones", "Operaciones (entrada → salida)", th.win], ["noticias", "Noticias USD", th.sl]] as [string, string, string][]).map(([k, l, c]) => (
                 <label key={k} className="layer-item"><input type="checkbox" checked={ui.layers[k] !== false} onChange={(e) => ui.setLayer(k, e.target.checked)} /><i style={{ background: c }} />{l}</label>
               ))}
               <label className="layer-item"><input type="checkbox" checked={ui.chart.rr} onChange={(e) => ui.setChart({ rr: e.target.checked })} /><i style={{ background: th.tp }} />Zonas de riesgo / beneficio</label>
