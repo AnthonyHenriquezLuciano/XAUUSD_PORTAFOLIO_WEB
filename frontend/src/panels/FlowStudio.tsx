@@ -32,7 +32,7 @@ export default function FlowStudio() {
     pressure?.state==="seller_proxy"?"Presión bajista estimada":
     pressure?.state==="mixed"?"Flujo mixto / señales contradictorias":"Datos insuficientes";
   const pocShare=p?.bins.find(b=>p.poc>=b.low&&p.poc<=b.high)?.share||0;
-  const valueShare=p?p.bins.filter(b=>b.low>=p.val-.001&&b.high<=p.vah+.001)
+  const valueShare=p?p.bins.filter(b=>b.price>=p.val-.02&&b.price<=p.vah+.02)
     .reduce((a,b)=>a+b.share,0)*100:null;
   const posInVa=d?.price!=null&&p?(d.price>p.vah?"Precio por encima del VAH":
     d.price<p.val?"Precio por debajo del VAL":"Precio dentro del área de valor"):"Sin contexto disponible";
@@ -55,6 +55,7 @@ export default function FlowStudio() {
       </div>
     </div>
     <div className="flow-toggles">
+      <label><input type="checkbox" checked={ui.layers.volumen !== false} onChange={e=>ui.setLayer("volumen",e.target.checked)} />Histograma de ticks</label>
       <label><input type="checkbox" checked={ui.layers.flujo !== false} onChange={e=>ui.setLayer("flujo",e.target.checked)} />Perfil en gráfico</label>
       <label><input type="checkbox" checked={ui.layers.fvg !== false} onChange={e=>ui.setLayer("fvg",e.target.checked)} />FVG M5</label>
     </div>
