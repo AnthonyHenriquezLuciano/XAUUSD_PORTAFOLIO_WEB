@@ -149,13 +149,13 @@ export class BarStore {
   tf(minutes: number) {
     const key = String(minutes);
     if (this.tfCache.has(key)) return this.tfCache.get(key);
-    const out: { time: number; open: number; high: number; low: number; close: number }[] = [];
-    if (minutes >= 1440) for (let k = 0; k < this.days.length; k++) if (this.dayFirst[k] < 0) out.push({ time: this.toSrv(this.days[k]), open: this.dOpen[k], high: this.dHigh[k], low: this.dLow[k], close: this.dClose[k] });
+    const out: { time: number; open: number; high: number; low: number; close: number; volume: number }[] = [];
+    if (minutes >= 1440) for (let k = 0; k < this.days.length; k++) if (this.dayFirst[k] < 0) out.push({ time: this.toSrv(this.days[k]), open: this.dOpen[k], high: this.dHigh[k], low: this.dLow[k], close: this.dClose[k], volume: 0 });
     for (let i = 0; i < this.length; i++) {
       const k = minutes >= 1440 ? this.dayn[i] + (this.ts[i] - this.tn[i]) : this.ts[i] - (this.ts[i] % (minutes * 60));
       const last = out[out.length - 1];
-      if (!last || last.time !== k) out.push({ time: k, open: this.o[i], high: this.h[i], low: this.l[i], close: this.c[i] });
-      else { if (this.h[i] > last.high) last.high = this.h[i]; if (this.l[i] < last.low) last.low = this.l[i]; last.close = this.c[i]; }
+      if (!last || last.time !== k) out.push({ time: k, open: this.o[i], high: this.h[i], low: this.l[i], close: this.c[i], volume: this.vol[i] });
+      else { if (this.h[i] > last.high) last.high = this.h[i]; if (this.l[i] < last.low) last.low = this.l[i]; last.close = this.c[i]; last.volume += this.vol[i]; }
     }
     this.tfCache.set(key, out);
     return out;

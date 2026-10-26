@@ -17,6 +17,8 @@ export default function FlowStudio() {
   const ui = useUI();
   const d = s.flow;
   const p = d?.profile;
+  const pressure = d?.pressure;
+  const reachable = new Map<string, import("../flow/reach").ReachEvidence>((d?.reach||[]).map(x=>[x.key,x]));
   const f = ui.flow;
   const showVolume = f.focus === "all" || f.focus === "volume";
   const showGaps = f.focus === "all" || f.focus === "inefficiency";
@@ -25,6 +27,15 @@ export default function FlowStudio() {
   const top = (d?.levels || []).filter(x=>["POC","VAH","VAL","VWAP","PDH","PDL","PWH","PWL"].includes(x.key));
   const gaps = (d?.gaps || []).slice().reverse().slice(0,9);
   const distance = (price: number) => d?.price == null ? "—" : (price - d.price >= 0 ? "+" : "") + fmt(price - d.price) + " $";
+  const percent = (n:number|null|undefined,digits=1)=>n==null?"—":n.toFixed(digits)+"%";
+  const stateName=pressure?.state==="buyer_proxy"?"Presión alcista estimada":
+    pressure?.state==="seller_proxy"?"Presión bajista estimada":
+    pressure?.state==="mixed"?"Flujo mixto / señales contradictorias":"Datos insuficientes";
+  const pocShare=p?.bins.find(b=>p.poc>=b.low&&p.poc<=b.high)?.share||0;
+  const valueShare=p?p.bins.filter(b=>b.price>=p.val-.02&&b.price<=p.vah+.02)
+    .reduce((a,b)=>a+b.share,0)*100:null;
+  const posInVa=d?.price!=null&&p?(d.price>p.vah?"Precio por encima del VAH":
+    d.price<p.val?"Precio por debajo del VAL":"Precio dentro del área de valor"):"Sin contexto disponible";
   return <div className="flow-studio stack">
     <header className="flow-title">
       <div><span className="premium-eyebrow">DATOS DE MERCADO / MICROESTRUCTURA</span><h2>Order Flow</h2></div>
@@ -44,6 +55,7 @@ export default function FlowStudio() {
       </div>
     </div>
     <div className="flow-toggles">
+      <label><input type="checkbox" checked={ui.layers.volumen !== false} onChange={e=>ui.setLayer("volumen",e.target.checked)} />Histograma de ticks</label>
       <label><input type="checkbox" checked={ui.layers.flujo !== false} onChange={e=>ui.setLayer("flujo",e.target.checked)} />Perfil en gráfico</label>
       <label><input type="checkbox" checked={ui.layers.fvg !== false} onChange={e=>ui.setLayer("fvg",e.target.checked)} />FVG M5</label>
     </div>
@@ -55,6 +67,34 @@ export default function FlowStudio() {
       <div className="flow-line"><span>Datos</span><b>{p ? p.bars+" velas ("+Math.round(p.coverage*100)+"%)" : "No disponible"}</b></div>
       <div className="flow-line"><span>Cálculo</span><b>OHLC uniforme (estimado)</b></div>
     </div>
+    {d && pressure && <section className="flow-section flow-pressure-card">
+      <span className="flow-section-caption">DOMINANCIA RELATIVA · ACTIVIDAD DE TICKS</span>
+      <div className="flow-pressure-top">
+        <div><strong className={pressure.state==="buyer_proxy"?"buy":pressure.state==="seller_proxy"?"sell":"gold"}>{stateName}</strong>
+          <small>{pressure.score==null?"Sin puntuación":("Concordancia "+pressure.agreement+"/4 · Score "+(pressure.score>0?"+":"")+pressure.score+" / 100")}</small>
+        </div>
+        <span className="flow-rvol" title="Actividad de los últimos 15 minutos frente a la mediana de hasta 12 ventanas previas">
+          {pressure.relativeVolume!=null?pressure.relativeVolume.toFixed(2)+"×":"—"} RVOL
+        </span>
+      </div>
+      {pressure.buyingProxyPct!=null&&pressure.sellingProxyPct!=null&&<div className="flow-pressure-balance">
+        <div className="flow-pressure-ends">
+          <span className="buy">Alcista* {percent(pressure.buyingProxyPct)}</span>
+          <span className="sell">Bajista* {percent(pressure.sellingProxyPct)}</span>
+        </div>
+        <div className="flow-pressure-meter" role="img" aria-label={"Presión estimada: "+pressure.buyingProxyPct+"% alcista y "+pressure.sellingProxyPct+"% bajista"}>
+          <div style={{width:pressure.buyingProxyPct+"%"}}/>
+        </div>
+      </div>}
+      <div className="flow-indicator-grid">
+        <div><span>CMF (20) · M1</span><b className={pressure.cmf20!=null&&pressure.cmf20>0?"buy":"sell"}>{pressure.cmf20??"—"}</b><small>Flujo por posición del cierre</small></div>
+        <div><span>MFI (14) · M1</span><b>{pressure.mfi14??"—"}</b><small>Índice de flujo monetario proxy</small></div>
+        <div><span>OBV (30) · M1</span><b className={pressure.obvRecent!=null&&pressure.obvRecent>0?"buy":"sell"}>{pressure.obvRecent??"—"}</b><small>Saldo normalizado de ticks</small></div>
+        <div><span>Actividad 15 min</span><b>{Math.round(pressure.recentTicks).toLocaleString("es-ES")}</b><small>{pressure.activity==="expansion"?"Expansión":pressure.activity==="contraction"?"Contracción":pressure.activity==="normal"?"Normal":"Sin comparación"}</small></div>
+      </div>
+      <p className="premium-note">*Son aproximaciones basadas en la ubicación del cierre de cada vela M1, NO compras ni ventas ejecutadas. No se dispone de delta agresor real, CVD de transacciones ni libro de órdenes.</p>
+      {pressure.absorptionHint&&<p className="flow-info">Volumen expandido y desplazamiento limitado: posible actividad bidireccional. No demuestra absorción institucional.</p>}
+    </section>}
     {!canWork && <div className="premium-warn">El análisis de flujo necesita una cuenta MT5 conectada con velas M1. No se generan valores ficticios.</div>}
     {f.mode==="fixed" && <div className="flow-info">
       <b>Perfil de rango fijo</b><p>Abre <strong>Dibujo → VP</strong>, marca el primer y último punto de tiempo sobre el gráfico y se calculará tu selección. Puedes mover los puntos o volver a elegir una zona.</p>
@@ -72,6 +112,11 @@ export default function FlowStudio() {
       <div className="flow-nodes">
         <div><span>VWAP ±1σ / ±2σ (proxy de dispersión M1)</span><b>{p.vwapBands?.length===4?p.vwapBands.map(x=>fmt(x)).join(" / "):"No disponible"}</b></div>
       </div>
+      <div className="flow-profile-context">
+        <div><span>Actividad en POC</span><b>{percent(pocShare*100)}</b></div>
+        <div><span>Participación en área de valor</span><b>{percent(valueShare)}</b></div>
+      </div>
+      <p className="flow-position-label">{posInVa} · Este dato describe aceptación de actividad, no una predicción.</p>
       <div className="flow-line"><span>Precio vs POC</span><b className={d.direction==="above_poc"?"buy":d.direction==="below_poc"?"sell":"gold"}>{d.direction==="above_poc"?"Sobre POC":d.direction==="below_poc"?"Bajo POC":"En POC / sin datos"}</b></div>
       <div className="flow-nodes">
         <div><span>HVN · Aceptación relativa</span><b>{p.hvn.length?p.hvn.map(v=>fmt(v)).join(" · "):"No detectados"}</b></div>
@@ -81,11 +126,19 @@ export default function FlowStudio() {
     </section>}
     {d && showLevels && <section className="flow-section">
       <span className="flow-section-caption">NIVELES RELEVANTES</span>
-      {top.sort((a,b)=>Math.abs(a.price-(d.price || 0))-Math.abs(b.price-(d.price || 0))).map(x=>
-        <div className="flow-level" key={x.key}>
-          <span className="flow-level-code">{x.key}</span><div><b>{fmt(x.price)}</b><small>{x.label}</small></div>
-          <span className={x.side==="above"?"buy":x.side==="below"?"sell":"dim"}>{distance(x.price)}</span>
-        </div>)}
+      <p className="premium-note">Frecuencia histórica de toque en 2 h, con perfil reconstruido en cada fecha. No es probabilidad futura calibrada; el tamaño de muestra importa.</p>
+      {top.sort((a,b)=>Math.abs(a.price-(d.price || 0))-Math.abs(b.price-(d.price || 0))).map(x=>{
+        const reach=reachable.get(x.key);
+        return <div className="flow-level flow-level-prob" key={x.key}>
+          <span className="flow-level-code">{x.key}</span>
+          <div><b>{fmt(x.price)}</b><small>{x.label} · {distance(x.price)}</small>
+            <small>{reach?.percent!=null?"Reserva "+reach.holdoutN+" eventos · IC 95% "+percent(reach.lower)+"–"+percent(reach.upper):
+              reach?.reason||"Sin estudio comparable"}</small></div>
+          <span className="flow-reach" title={reach?.reason||"No disponible"}>
+            {reach?.percent!=null?percent(reach.percent,0):"N/D"}<small>2 h hist.</small>
+          </span>
+        </div>;
+      })}
       {!top.length && <p className="premium-note">Sin niveles confiables para esta muestra.</p>}
     </section>}
     {d && showLevels && <section className="flow-section">
@@ -107,7 +160,7 @@ export default function FlowStudio() {
     {d && <div className="flow-info">
       <b>Lectura explicable</b>
       {d.evidence.map((x,i)=><p key={i}>• {x}</p>)}
-      <p>Los niveles no predicen por sí solos la dirección. La probabilidad de llegar a ellos permanece desactivada hasta contar con validación prospectiva y muestra suficiente.</p>
+      <p>Las frecuencias históricas son descriptivas y condicionadas a distancias comparables. Si no hay suficientes eventos independientes se muestra N/D. La probabilidad prospectiva calibrada sigue pendiente.</p>
     </div>}
     <p className="premium-note">Análisis visual únicamente. Sin órdenes ni cambios automáticos en las estrategias. Los perfiles no representan volumen real centralizado de futuros COMEX.</p>
   </div>;
