@@ -3,6 +3,7 @@
 import { emit, type Backend } from "../api";
 import { BarStore, dayOf, DailyBars, RawBars } from "../ai/bars";
 import { buildFlow } from "../flow/engine";
+import { levelReachEvidence } from "../flow/reach";
 import { inspectBars, studyTargets, type LevelKey } from "../research/engine";
 import { computeFeatures, FeatTable } from "../ai/features";
 import { loadModels, Models, predictEntry, scenGet, labelRegime, labelVol } from "../ai/model";
@@ -51,6 +52,7 @@ export async function createCloud(accountId: string): Promise<Backend> {
   const timers: number[] = [];
   const waiting = new Map<number, { resolve: (v: any) => void; reject: (e: Error) => void; timer: number }>();
   let barBusy = false, lastTickMin = 0;
+  let reachCache: { key: string; reach: ReturnType<typeof levelReachEvidence> } | null = null;
 
   const fail = (m: string): never => { throw new Error(m); };
   const can = (r: string) => ({ viewer: 0, trader: 1, owner: 2 } as any)[role] >= ({ viewer: 0, trader: 1, owner: 2 } as any)[r];
@@ -537,14 +539,27 @@ export async function createCloud(accountId: string): Promise<Backend> {
         const last = flowStore.ts[flowStore.length - 1] + 59;
         // El corte jamás puede superar la última vela disponible.
         const cutoff = Math.min(last, k?.time || last, Number(qs.get("cutoff") || last));
-        return buildFlow(flowStore, last, {
+        const flowOptions = {
           mode: mode as "session" | "fixed" | "recent",
           scope: scope as "tokyo" | "london" | "newyork" | "day",
           start: qs.has("start") ? Number(qs.get("start")) : undefined,
           end: qs.has("end") ? Number(qs.get("end")) : undefined,
           bins: qs.has("bins") ? Number(qs.get("bins")) : 64,
           cutoff, brokerOffsetSec: srvOffset()
-        });
+        };
+        const data = buildFlow(flowStore, last, flowOptions);
+        // Deliberately measure historical *touch frequency*, never trade success.
+        // A matching session + distance cohort is evaluated on completed horizons.
+        if(data.levels.length) {
+          const key = [flowStore.length, flowStore.ts[flowStore.length-1],
+            flowOptions.mode,flowOptions.scope,flowOptions.bins,
+            data.levels.map(x=>x.key+":"+x.price.toFixed(2)).join("|")].join(":");
+          if (reachCache?.key !== key) {
+            reachCache={key,reach:levelReachEvidence(flowStore,data.levels,cutoff,flowOptions)};
+          }
+          data.reach=reachCache.reach;
+        }
+        return data;
       }
       case "GET /api/overlays": return { zones: store && k ? zonesAt(store, k.time) : [], strategies: strategies(), levels: signals.levels || [] };
       case "GET /api/command_audit": {
