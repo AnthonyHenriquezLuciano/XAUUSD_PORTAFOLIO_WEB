@@ -1,0 +1,70 @@
+name: Publish XAU Portfolio AI to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "frontend/**"
+      - ".github/workflows/deploy-pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: "github-pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Verify and compile Vite site
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pages: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install locked packages
+        working-directory: frontend
+        run: npm ci
+      - name: Typecheck, build, and run scientific and UI checks
+        working-directory: frontend
+        run: npm run test:release
+      - name: Compile for repository subpath
+        working-directory: frontend
+        run: npm run build -- --base=/${{ github.event.repository.name }}/
+      - name: Verify relative asset paths for Pages
+        working-directory: frontend
+        run: node test/validate_pages.mjs
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+      - name: Upload production files (not source code)
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: frontend/dist
+
+  deploy:
+    name: Publish verified build
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

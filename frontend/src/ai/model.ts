@@ -20,7 +20,7 @@ function dec<T>(b64: string, C: any): T {
 }
 
 let cache: Promise<Models> | null = null;
-export function loadModels(url = "/ai/models.json"): Promise<Models> {
+export function loadModels(url = `${import.meta.env.BASE_URL}ai/models.json`): Promise<Models> {
   if (!cache) cache = fetch(url).then((r) => { if (!r.ok) throw new Error("No se pudo cargar la IA"); return r.json(); }).then(parseModels);
   return cache;
 }

@@ -39,3 +39,8 @@ jobs:
       - name: Validate bundle, session clocks, profiles and risk
         working-directory: frontend
         run: npm run test:release
+      - name: Validate Pages-specific asset base and redirects
+        working-directory: frontend
+        run: |
+          npm run build -- --base=/XAUUSD_PORTAFOLIO_WEB/
+          node test/validate_pages.mjs
