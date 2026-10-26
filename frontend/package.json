@@ -8,7 +8,9 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test:sessions": "node test/validate_sessions.mjs",
-    "test:flow": "node test/validate_flow.mjs"
+    "test:flow": "node test/validate_flow.mjs",
+    "test:risk": "node test/validate_risk.mjs",
+    "test:release": "npm run build && npm run test:sessions && npm run test:flow && npm run test:risk"
   },
   "dependencies": {
     "@fontsource/ibm-plex-mono": "^5.1.1",
