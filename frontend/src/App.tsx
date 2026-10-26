@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import AccountDialog from "./components/AccountDialog";
+import { ShortcutHelp, WorkspaceControls, useWorkspacePreferences } from "./components/WorkspacePreferences";
 import Chart from "./components/Chart";
 import Header from "./components/Header";
 import { Icon } from "./icons";
@@ -23,6 +24,7 @@ import "./design-system.css";
 import "./navigation.css";
 import "./workspace.css";
 import "./dashboard.css";
+import "./polish.css";
 import { tstr, useApp } from "./store";
 import { useUI } from "./uiState";
 
@@ -58,11 +60,19 @@ export default function App({ signedIn, onExitSim }: { signedIn: boolean; onExit
   const alerts = useSmartAlerts(s);
   const [logOpen, setLogOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const prefs = useWorkspacePreferences();
+  useEffect(()=>{
+    if(!moreOpen)return;
+    const close=(e:KeyboardEvent)=>{if(e.key==="Escape")setMoreOpen(false);};
+    window.addEventListener("keydown",close);
+    return ()=>window.removeEventListener("keydown",close);
+  },[moreOpen]);
   const view = NAV.some(x => x.key === ui.tab) ? ui.tab : "operar";
   const withChart = CHART_VIEWS.has(view);
   const page = { centro: <CommandCenter alerts={alerts} />, sesiones: <RealSessions />, lab: <PremiumLab />, seguridad: <ExecutionSafety />, ciencia: <ResearchConsole />, portafolio: <PortfolioCockpit />, diario: <Journal />, stats: <Stats />, estrategias: <Strategies />, ajustes: <Settings /> }[view as "centro" | "sesiones" | "lab" | "seguridad" | "ciencia" | "portafolio" | "diario" | "stats" | "estrategias" | "ajustes"];
   return (
-    <div className={`app ${withChart ? "v-chart" : "v-page"}`}>
+    <div className={`app ${withChart ? "v-chart" : "v-page"} ${prefs.density==="compact"?"density-compact":""}`}>
+      <a className="skip-to-content" href="#workspace-main">Saltar al contenido principal</a>
       <Header onExitSim={onExitSim} />
       <nav className="rail" aria-label="Navegación principal">
         <div className="rail-groups">
@@ -80,6 +90,9 @@ export default function App({ signedIn, onExitSim }: { signedIn: boolean; onExit
             </div>
           ))}
         </div>
+        <div className="rail-preferences">
+          <WorkspaceControls density={prefs.density} onDensity={prefs.setDensity} onHelp={()=>prefs.setHelpOpen(true)}/>
+        </div>
         <div className="rail-mobile">
           {NAV.filter(x => QUICK_NAV.includes(x.key)).map(({key,label,icon}) => (
             <button key={key} className={`rail-btn ${view===key?"on":""}`} aria-current={view===key?"page":undefined} aria-label={label}
@@ -94,6 +107,7 @@ export default function App({ signedIn, onExitSim }: { signedIn: boolean; onExit
         </div>
         {moreOpen && <div className="rail-overflow" id="mobile-navigation">
           <div className="rail-overflow-header"><strong>Explorar secciones</strong><button aria-label="Cerrar menú" className="btn sm" onClick={()=>setMoreOpen(false)}>Cerrar</button></div>
+          <WorkspaceControls density={prefs.density} onDensity={prefs.setDensity} onHelp={()=>{prefs.setHelpOpen(true);setMoreOpen(false);}}/>
           {NAV_GROUPS.map(group=><div className="rail-overflow-group" key={group.id}>
             <span>{group.name}</span>
             <div>{group.items.map(item=><button key={item.key} className={view===item.key?"on":""}
@@ -103,14 +117,14 @@ export default function App({ signedIn, onExitSim }: { signedIn: boolean; onExit
         </div>}
       </nav>
       {withChart ? (
-        <main className="work">
+        <main className="work" id="workspace-main" tabIndex={-1}>
           <Chart />
           <aside className="side" aria-label={view === "operar" ? "Operar" : view === "flujo" ? "Flujo" : "Mercado"}>
             {view === "operar" ? <Trade /> : view === "flujo" ? <FlowStudio /> : <Signals />}
           </aside>
         </main>
       ) : (
-        <main className="page"><div className="page-in">{page}</div></main>
+        <main className="page" id="workspace-main" tabIndex={-1}><div className="page-in">{page}</div></main>
       )}
       <footer className="log">
         <button className="log-head" onClick={() => setLogOpen(!logOpen)} aria-expanded={logOpen}>
@@ -121,6 +135,7 @@ export default function App({ signedIn, onExitSim }: { signedIn: boolean; onExit
         {logOpen ? <div className="log-body">{s.events.map((e, i) => <div key={i} className={e.level}><span className="dim">{tstr(e.t)}</span> {e.msg}</div>)}</div> : null}
       </footer>
       <AccountDialog signedIn={signedIn} />
+      <ShortcutHelp open={prefs.helpOpen} onClose={()=>prefs.setHelpOpen(false)}/>
       <div className="toasts" role="status" aria-live="polite">{toasts.map((t) => <div key={t.id} className={`toast ${t.kind}`}>{t.msg}</div>)}</div>
     </div>
   );
