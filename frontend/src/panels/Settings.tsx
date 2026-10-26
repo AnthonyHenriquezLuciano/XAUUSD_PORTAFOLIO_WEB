@@ -80,32 +80,14 @@ function SimSettings() {
 }
 
 export function AISettings() {
-  const { s, toast, refresh } = useApp();
-  const [key, setKey] = useState("");
+  const { s } = useApp();
   const m = s.models || {};
   const em = m.entry_meta?.metrics || {};
   const fm = m.forecast_meta?.metrics || {};
-  const saveKey = async () => {
-    try { await api("/api/secret", "POST", { name: "anthropic_api_key", value: key }); setKey(""); toast("API key guardada", "ok"); refresh(); } catch (e: any) { toast(e.message, "error"); }
-  };
-  const setModel = async (v: string) => { await api("/api/settings", "PUT", { chat_model: v }); refresh(); };
   return (
-    <Card title="IA">
-      {s.broker === "sim" ? <div className="okbox">En el simulador el chat usa la API key que guardes al entrar con tu cuenta (Ajustes → IA de cualquier cuenta).</div> : <Field label={`API key de Anthropic ${s.secrets?.anthropic ? "(guardada ✓)" : "(no guardada)"}`} hint="Se guarda cifrada en el servidor y el navegador no puede leerla: solo la usa la función del chat. Pago por uso en console.anthropic.com.">
-        <div className="row"><input className="grow" type="password" placeholder="sk-ant-…" value={key} onChange={(e) => setKey(e.target.value)} /><button className="btn" onClick={saveKey} disabled={!key}>Guardar</button>
-          {s.secrets?.anthropic ? <button className="btn ghost" onClick={async () => { await api("/api/secret", "POST", { name: "anthropic_api_key", value: "" }); refresh(); }}>Borrar</button> : null}</div>
-      </Field>}
-      <Field label="Modelo del chat">
-        <select value={s.settings?.chat_model} onChange={(e) => setModel(e.target.value)}>
-          <option value="claude-sonnet-5-5">Claude Sonnet 5.5 (equilibrado)</option>
-          <option value="claude-opus-5-5">Claude Opus 5.5 (más capaz, más caro)</option>
-          <option value="claude-haiku-5-5">Claude Haiku 5.5 (rápido y barato)</option>
-          <option value="claude-fable-5-1">Claude Fable 5.1 (el más capaz)</option>
-        </select>
-      </Field>
-      <div style={{ marginTop: 10 }}>
-        <b>Modelos de la app</b>
-        <div className="small muted">{m.entry ? `Entradas: entrenado ${tstr(m.entry_meta?.t)} con ${m.entry_meta?.n?.toLocaleString("es-ES")} entradas simuladas de XAUUSD 2024-2026` : "Cargando modelos…"}. Se calculan en tu navegador con las velas de la cuenta.</div>
+    <Card title="Modelos de la app">
+      <div>
+        <div className="small muted">{m.entry ? `Entradas: entrenado ${tstr(m.entry_meta?.t)} con ${m.entry_meta?.n?.toLocaleString("es-ES")} entradas simuladas de XAUUSD 2024-2026` : "Cargando modelos…"}. Se calculan en tu navegador con las velas de la cuenta: no necesitan ninguna clave ni servicio externo.</div>
       </div>
       {em.logloss ? (
         <div className="small" style={{ marginTop: 8 }}>

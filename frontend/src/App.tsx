@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import AccountDialog from "./components/AccountDialog";
 import Chart from "./components/Chart";
 import Header from "./components/Header";
-import Chat from "./panels/Chat";
 import Journal from "./panels/Journal";
 import Positions from "./panels/Positions";
 import Settings from "./panels/Settings";
@@ -12,13 +11,13 @@ import Trade from "./panels/Trade";
 import { tstr, useApp } from "./store";
 import { useUI } from "./uiState";
 
-const TABS: [string, string][] = [["operar", "Operar"], ["senales", "Señales"], ["posiciones", "Posiciones"], ["diario", "Diario"], ["chat", "Chat"], ["estrategias", "Estrategias"], ["ajustes", "Ajustes"]];
+const TABS: [string, string][] = [["operar", "Operar"], ["senales", "Señales"], ["posiciones", "Posiciones"], ["diario", "Diario"], ["estrategias", "Estrategias"], ["ajustes", "Ajustes"]];
 
 export default function App({ signedIn, onExitSim }: { signedIn: boolean; onExitSim?: () => void }) {
   const { s, toasts } = useApp();
   const ui = useUI();
   const [logOpen, setLogOpen] = useState(false);
-  const panel = { operar: <Trade />, senales: <Signals />, posiciones: <Positions />, diario: <Journal />, chat: <Chat />, estrategias: <Strategies />, ajustes: <Settings /> }[ui.tab];
+  const panel = { operar: <Trade />, senales: <Signals />, posiciones: <Positions />, diario: <Journal />, estrategias: <Strategies />, ajustes: <Settings /> }[ui.tab];
   return (
     <div className="app">
       <Header onExitSim={onExitSim} />
@@ -32,7 +31,7 @@ export default function App({ signedIn, onExitSim }: { signedIn: boolean; onExit
               </button>
             ))}
           </div>
-          <div className="panel" style={ui.tab === "chat" ? { display: "flex", flexDirection: "column" } : undefined}>{panel}</div>
+          <div className="panel">{panel}</div>
         </div>
       </div>
       <div className="log">

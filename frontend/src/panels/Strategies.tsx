@@ -43,7 +43,6 @@ export default function Strategies() {
         <div className="hint" style={{ marginTop: 6 }}>Riesgo, límite de operaciones, cierre por tiempo y reglas de FundingPips son globales (Ajustes). Las estrategias las ejecuta el EA aunque cierres la web.</div>
       </Card>
       <Backtest />
-      {cloud ? <MQ5Assist /> : null}
     </div>
   );
 }
@@ -142,39 +141,12 @@ function Backtest() {
             {extra ? <>
               <ParamEditor params={extra.params} label="Usar en el backtest" onSave={(p) => { setExtra({ ...extra, params: p }); toast("Estrategia de prueba lista", "ok"); }} />
               {extra.kind === "RANGE" ? <label className="row small"><input type="checkbox" checked={!!extra.needInside} onChange={(e) => setExtra({ ...extra, needInside: e.target.checked })} />Solo si el precio está dentro del rango al terminar</label> : null}
-            </> : <div className="hint">Ideal para probar la traducción de un EA MQ5 (ver abajo) antes de pedir que se añada al EA.</div>}
+            </> : <div className="hint">Prueba aquí una idea de estrategia (rupturas de rango, momentum a una hora o niveles redondos) antes de añadirla al EA.</div>}
           </div>
         </details>
       ) : null}
       {job?.status === "error" ? <div className="errbox" style={{ marginTop: 8 }}>{job.error}</div> : null}
       {res ? <div style={{ marginTop: 10 }}>{res.note ? <div className="hint">{res.note}</div> : null}<EquityChart data={res.equity} /><Stats sm={res.summary} /></div> : <div className="hint" style={{ marginTop: 6 }}>{cloud ? "Usa las velas M1 reales de tu bróker guardadas en la web, el riesgo de Ajustes, spread real y 10 $ por lote de costes. Mismo motor que la investigación (comprobado operación a operación)." : "En el simulador se muestra el resultado precalculado del portafolio 2024-2026."}</div>}
-    </Card>
-  );
-}
-
-function MQ5Assist() {
-  const { s, toast, dispatch } = useApp();
-  const ui = useUI();
-  const [mq5, setMq5] = useState("");
-  const onFile = async (f: File | undefined) => {
-    if (!f) return;
-    const buf = await f.arrayBuffer();
-    let txt = new TextDecoder("utf-8").decode(buf);
-    if (txt.includes("\u0000")) txt = new TextDecoder("utf-16le").decode(buf);
-    setMq5(txt);
-  };
-  const analyze = async () => {
-    if (!s.secrets?.anthropic) return toast("Primero guarda tu API key de Anthropic en Ajustes → IA", "warn");
-    const code = mq5.length > 11000 ? mq5.slice(0, 11000) + "\n// … (recortado)" : mq5;
-    const text = `Analiza este EA/estrategia en MQL5. 1) Resume sus reglas de entrada, salida, SL/TP y horario en lenguaje claro. 2) Compáralo con las 5 estrategias del portafolio. 3) Si encaja en una de las plantillas del backtest de la web (Ruptura de rango OCO: range_start, range_end, fill_end, sl_atr, tp_r, exit_time; Momentum a una hora: open_time, entry_time, window_min, sl_atr, tp_r, exit_time; Niveles redondos: ref_time, step, buf_atr, fill_end, sl_atr, tp_r, exit_time; horas GMT+2/+3), dame los parámetros exactos para probarla. 4) Di qué partes no se pueden representar con esas plantillas.\n\n\`\`\`mq5\n${code}\n\`\`\``;
-    try { await api("/api/chat", "POST", { text }); ui.setTab("chat"); } catch (e: any) { toast(e.message, "error"); }
-  };
-  return (
-    <Card title="Estrategias desde código MQ5">
-      <div className="hint">Las órdenes las ejecuta el EA puente en MT5, así que una estrategia nueva se prueba aquí y, si te convence, se añade al EA. Pega el código o sube el .mq5: la IA te explica sus reglas y te da los parámetros para probarla en el backtest («Estrategia de prueba»). Nada de ese código se ejecuta en la web.</div>
-      <div className="row" style={{ margin: "8px 0" }}><input type="file" accept=".mq5,.mqh,.txt" onChange={(e) => onFile(e.target.files?.[0])} /></div>
-      <textarea rows={6} style={{ width: "100%" }} placeholder="// código MQL5…" value={mq5} onChange={(e) => setMq5(e.target.value)} />
-      <button className="btn primary" style={{ marginTop: 6 }} disabled={mq5.length < 50} onClick={analyze}>Analizar con IA en el chat</button>
     </Card>
   );
 }

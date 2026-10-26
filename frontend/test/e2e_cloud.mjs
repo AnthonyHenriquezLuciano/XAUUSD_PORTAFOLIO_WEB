@@ -319,12 +319,11 @@ try {
     await page.getByRole("button", { name: "Activar" }).click();
     await page.getByText("Automático ON").waitFor({ timeout: 5000 });
   });
-  await step("chat", async () => {
-    await page.getByRole("button", { name: "Chat" }).click();
-    await page.locator(".chat textarea, .chat input").first().fill("¿Qué tal mi última venta?");
-    await page.keyboard.press("Enter");
-    await page.getByText(/retroceso al máximo de Asia/).first().waitFor({ timeout: 10000 });
-    await shot("09_chat");
+  await step("sin chat ni API key", async () => {
+    if (await page.getByRole("button", { name: "Chat", exact: true }).count()) throw new Error("sigue la pestaña Chat");
+    await page.getByRole("button", { name: "Ajustes" }).click();
+    if (await page.getByText(/API key/).count()) throw new Error("sigue el campo de API key");
+    await page.getByText("Modelos de la app").waitFor();
   });
   await step("backtest con velas del bróker", async () => {
     await page.getByRole("button", { name: "Estrategias" }).click();

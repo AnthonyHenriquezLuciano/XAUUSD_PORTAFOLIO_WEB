@@ -10,14 +10,13 @@ Web para operar oro (XAUUSD) en MetaTrader 5 desde el navegador (PC o móvil), c
   - historial de cada estrategia en el escenario actual.
 - **Señales**: régimen, volatilidad, sesión, niveles clave y qué conviene hacer.
 - **Diario evaluado**: cada operación cerrada recibe una nota (0–100) y un veredicto: «buena entrada» o «debiste esperar».
-- **Chat con Claude** que conoce tu cuenta, tus operaciones y tu estrategia manual. Usa tu API key; las reglas que le explicas se guardan como notas.
-- **Backtest** del portafolio con las velas reales de tu bróker. Permite probar otros parámetros o una estrategia nueva, por ejemplo traducida de un `.mq5` con ayuda de la IA.
+- **Backtest** del portafolio con las velas reales de tu bróker. Permite probar otros parámetros o una estrategia nueva.
 - **Cuentas compartidas**: invitas a quien quieras por correo, con acceso de «solo ver» o «puede operar».
 
 ## Cómo funciona
 
 ```
-MT5 + EA puente  ──(cada 1 s, HTTPS)──►  Supabase (base de datos, tiempo real, chat)  ◄──►  Web (Vercel)
+MT5 + EA puente  ──(cada 1 s, HTTPS)──►  Supabase (base de datos y tiempo real)  ◄──►  Web (Vercel)
    ejecuta las 5 estrategias                 velas, cuenta, diario, órdenes, ajustes          gráfico, IA, señales
    y las órdenes de la web
 ```
@@ -32,7 +31,6 @@ Las piezas:
 - **Supabase**, proyecto `neqfafcelxgcxroicmer`:
   - Postgres con reglas RLS: cada persona ve solo sus cuentas y las compartidas con ella.
   - Tiempo real para precio, estado, órdenes y diario.
-  - Función `chat`, que usa tu API key de Anthropic guardada en el servidor. El navegador no puede leer la key.
 - **Web** (`frontend/`): React + TradingView Lightweight Charts. La IA (árboles exportados del modelo entrenado, tablas del cono y estadísticas por escenario) va en `public/ai/models.json`.
 
 ## Puesta en marcha
@@ -89,10 +87,8 @@ En Cuentas → **Compartir**, escribe el correo de la persona y elige «Solo ver
   - «Solo ver» no puede enviar órdenes ni cambiar ajustes.
   - Solo el propietario genera claves y comparte.
   - Se probó con usuarios reales de prueba en la base de datos y después se borraron.
-- **API key de Anthropic**: se guarda en el servidor y el navegador no puede leerla. Solo la usa la función `chat`.
 - **La web**:
   - Lleva una cabecera CSP que solo permite conectar con tu proyecto de Supabase, y no se puede incrustar en otras páginas.
-  - El código MQ5 que pegues nunca se ejecuta: solo se envía a Claude para analizarlo.
 
 ## Qué se ha comprobado y qué no
 
@@ -107,16 +103,15 @@ Lo que se ha comprobado:
   - Probabilidades: diferencia < 0,000001.
   - La ventana de 15 días más la tabla diaria da las mismas variables que el histórico completo.
 - **Backtest en el navegador**: coincide **operación a operación** con el de Python. Sobre 5 meses de M1 da 359/359 operaciones idénticas sin reglas de fondeo y 151/151 con ellas.
-- **Web completa**: se probó con Playwright contra un Supabase simulado (REST, auth, tiempo real y chat) y un EA simulado, en escritorio y móvil, con la CSP de producción. Pasaron los 14 pasos, sin errores de consola:
+- **Web completa**: se probó con Playwright contra un Supabase simulado (REST, auth y tiempo real) y un EA simulado, en escritorio y móvil, con la CSP de producción. Pasaron los 14 pasos, sin errores de consola:
   - entrar, abrir la cuenta, señales y predicción;
   - preparar la orden con probabilidades, enviarla, BE y arrastrar el TP;
-  - diario evaluado, ajustes, Automático ON, chat con nota guardada y backtest.
+  - diario evaluado, ajustes, Automático ON y backtest.
 
 Lo que no se ha podido probar:
 
 - **El EA no se ha compilado**: aquí no hay MetaEditor. Se revisó a mano, con comprobación automática de llaves, variables declaradas y funciones duplicadas. Si MetaEditor da un error, pásame el texto exacto.
 - **No se ha probado contra un MT5 real**. Empieza en una **cuenta demo**, mira la pestaña Expertos de MT5 y el registro de la web.
-- **El chat no se ha probado con una key real de Anthropic**: el entorno de pruebas no tiene acceso a Internet. La función está desplegada y responde con mensajes claros si la key falta o no es válida.
 
 ## Qué esperar de la IA (medido fuera de muestra)
 
@@ -146,7 +141,7 @@ frontend/                    la web (React + Vite)
   public/ea/                 EA para descargar desde la web
   test/                      pruebas (validación de la IA, backtest y extremo a extremo)
 supabase/migrations/         esquema, reglas RLS y funciones (ya aplicadas en el proyecto)
-supabase/functions/chat/     función del chat (ya desplegada)
+supabase/functions/chat/     función del chat (ya no se usa: la web no necesita ninguna API key)
 mt5/XAU_Portfolio_Bridge_v6.mq5   EA puente
 tools/export_models.py       exporta la IA entrenada a JSON
 ```

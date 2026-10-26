@@ -5,7 +5,6 @@ import { BarStore, dayOf, DailyBars, RawBars } from "../ai/bars";
 import { computeFeatures, FeatTable } from "../ai/features";
 import { loadModels, Models, predictEntry, scenGet, labelRegime, labelVol } from "../ai/model";
 import { evaluateTrade, featAt, marketState, zonesAt } from "../ai/analytics";
-import { extractNotes, streamChat } from "../lib/chat";
 import { supabase } from "../lib/supabase";
 
 const WINDOW_DAYS = 15;
@@ -29,12 +28,10 @@ const CMD_MSG: Record<string, string> = {
 export async function createCloud(accountId: string): Promise<Backend> {
   let alive = true;
   let acc: any = null, role = "viewer", me: any = null;
-  let st: any = {}, live: any = {}, setRow: any = { data: {} }, secrets: any = { anthropic: false, chat_model: "claude-sonnet-5-5" };
+  let st: any = {}, live: any = {}, setRow: any = { data: {} };
   let store: BarStore | null = null, T: FeatTable | null = null, models: Models | null = null;
   let trades: any[] = [];
   let events: any[] = [];
-  let chat: any[] = [];
-  let notes: any[] = [];
   let signals: any = {};
   let lastLiveAt = 0;
   let status = "conectando";
@@ -104,7 +101,7 @@ export async function createCloud(accountId: string): Promise<Backend> {
       risk: { risk_pct: Number(v("risk_pct", 0.3)), max_open_trades: Number(v("max_open_trades", 4)), use_time_exit: !!v("use_time_exit", true), compound: !!v("compound", true) },
       funding: { enabled: true, phase: Number(d.phase ?? (Number(e.target_pct) === 8 ? 1 : Number(e.target_pct) === 5 ? 2 : 0)), daily_loss_pct: 3, max_loss_pct: Number(e.max_loss_pct ?? 10),
         daily_guard_pct: Number(v("daily_guard_pct", 2.5)), max_guard_pct: Number(v("max_guard_pct", 9)), target_pct: Number(v("target_pct", 0)), initial_balance: Number(e.initial_balance || 0) },
-      strategies: strat, chat_model: secrets.chat_model, pending, ea_settings: e, web_settings: d,
+      strategies: strat, pending, ea_settings: e, web_settings: d,
     };
   }
   function eaInfo() {
@@ -124,7 +121,7 @@ export async function createCloud(accountId: string): Promise<Backend> {
     return {
       status, broker: "cloud", role, me: me?.email, accountInfo: acc ? { id: acc.id, name: acc.name, login: acc.login, server: acc.server } : null,
       ea: eaInfo(), account: account(), positions: positions(), orders: orders(), risk: risk(), signals, strategies: strategies(), settings: settings(),
-      secrets, tick: tick(), market: market(), models: models ? { entry: true, forecast: true, entry_meta: models.entry.meta, forecast_meta: models.forecast.meta } : {},
+      tick: tick(), market: market(), models: models ? { entry: true, forecast: true, entry_meta: models.entry.meta, forecast_meta: models.forecast.meta } : {},
       history: store?.length || 0, sim: null,
     };
   }
@@ -307,40 +304,6 @@ export async function createCloud(accountId: string): Promise<Backend> {
     return { ok: true, settings: settings(), applied: eaOnline() };
   }
 
-  // ------------------------------------------------------------------ chat
-  const RULES = `Eres el copiloto de trading de XAU Portfolio AI (oro, XAUUSD, MetaTrader 5, cuenta de fondeo FundingPips).
-Hablas en español, claro y directo. Ayudas a entender el mercado, evalúas las operaciones manuales del usuario y su estrategia manual, y explicas el portafolio automático (5 estrategias: LM, AORB, TOK, R50, ALB), que ejecuta el EA puente en MT5.
-Reglas:
-- Basa tus opiniones en los datos de la app que tienes abajo (mercado, cuenta, operaciones con su evaluación automática).
-- Sé honesto: el modelo de dirección acierta ~50 % (no hay ventaja direccional demostrada); el cono es un rango de volatilidad calibrado, no una promesa. No inventes probabilidades ni resultados.
-- Al evaluar operaciones sé concreto: entrada, SL, gestión, momento, tamaño, alineación con el régimen; di qué harías distinto.
-- Si el usuario explica una regla de su estrategia manual, añade al final una línea <nota>regla resumida</nota> para guardarla.
-- No eres asesor financiero y no ejecutas órdenes. Respuestas breves salvo que pidan detalle.`;
-  async function runChat(text: string, id: number) {
-    const { data: u } = await supabase.from("chat_messages").insert({ role: "user", content: text }).select("id").single();
-    chat.push({ id: u?.id ?? Date.now(), role: "user", content: text });
-    emit({ type: "chat_start", id });
-    updateSignals();
-    const ctx = {
-      mercado: { ...signals, forecast: signals.forecast?.points, strategies: signals.strategies?.map((s: any) => ({ name: s.name, state: s.state, enabled: s.enabled, historial_escenario: s.scenario && { expR: r2(s.scenario.expR), casos: s.scenario.n_cell } })) },
-      cuenta: account(), posiciones: positions(), ordenes: orders(), riesgo: risk(), ea: eaInfo(), ajustes: settings().web_settings,
-      diario: trades.slice(0, 20).map((t) => ({ ticket: t.ticket, source: t.source, strategy: t.strategy, side: t.side, lots: t.lots, entry: t.entry, sl: t.sl0, tp: t.tp0, apertura: new Date(Number(t.t_open) * 1000).toISOString().slice(0, 16), exit: t.exit, pnl: t.pnl, R: t.r, reason: t.reason, status: t.status,
-        evaluacion: t.evaluation?.ok ? { score: t.evaluation.score, verdict: t.evaluation.verdict, timing: t.evaluation.timing, notes: t.evaluation.notes, regime: t.evaluation.regime, aligned: t.evaluation.aligned } : null })),
-    };
-    const notesTxt = notes.length ? `\n\nNotas de la estrategia manual del usuario:\n- ${notes.map((n) => n.text).join("\n- ")}` : "";
-    const system = RULES + notesTxt + `\n\nDatos actuales de la app (JSON, horas del servidor del bróker):\n${JSON.stringify(ctx).slice(0, 40000)}`;
-    try {
-      const full = await streamChat(system, chat.slice(-20).map((m) => ({ role: m.role, content: m.content })), (d) => emit({ type: "chat_delta", id, text: d }), secrets.chat_model);
-      const { notes: nn } = extractNotes(full);
-      for (const t of nn) { const { data: n } = await supabase.from("notes").insert({ text: t }).select("*").single(); if (n) notes.push(n); }
-      const { data: a } = await supabase.from("chat_messages").insert({ role: "assistant", content: full || "(sin respuesta)" }).select("id").single();
-      chat.push({ id: a?.id ?? Date.now(), role: "assistant", content: full });
-      emit({ type: "chat_end", id, text: full });
-    } catch (e: any) {
-      emit({ type: "chat_error", id, error: e?.message || "No se pudo obtener respuesta." });
-    }
-  }
-
   // ------------------------------------------------------------------ tiempo real
   function onLive(row: any) {
     live = row;
@@ -391,7 +354,7 @@ Reglas:
     emit({ type: "status", status: "conectando" });
     const { data: ses } = await supabase.auth.getUser();
     me = ses.user;
-    const [a, mem, s, l, sr, ev, tr, ch, nt, sec] = await Promise.all([
+    const [a, mem, s, l, sr, ev, tr] = await Promise.all([
       supabase.from("accounts").select("*").eq("id", accountId).single(),
       supabase.from("account_members").select("role").eq("account_id", accountId).eq("user_id", me?.id).maybeSingle(),
       supabase.from("account_state").select("*").eq("account_id", accountId).single(),
@@ -399,22 +362,15 @@ Reglas:
       supabase.from("settings").select("data, updated_at").eq("account_id", accountId).single(),
       supabase.from("events").select("t, level, msg").eq("account_id", accountId).order("t", { ascending: false }).limit(300),
       supabase.from("trades").select("*").eq("account_id", accountId).order("t_open", { ascending: false }).limit(500),
-      supabase.from("chat_messages").select("id, role, content").order("id", { ascending: false }).limit(60),
-      supabase.from("notes").select("*").order("id"),
-      supabase.rpc("my_secrets"),
     ]);
     if (a.error) fail("No tienes acceso a esta cuenta o ya no existe.");
     acc = a.data; role = mem.data?.role || "viewer"; st = s.data || {}; live = l.data || {}; setRow = sr.data || { data: {} };
     events = (ev.data || []).map((e: any) => ({ t: Math.floor(Date.parse(e.t) / 1000), level: e.level, msg: e.msg }));
     trades = tr.data || [];
-    chat = (ch.data || []).reverse();
-    notes = nt.data || [];
-    secrets = sec.data || secrets;
     if (live.updated_at && Date.now() - Date.parse(live.updated_at) < 12000) lastLiveAt = Date.parse(live.updated_at);
     subscribeRealtime();
     emit({ type: "hello", state: { ...fullState(), status: "conectando" } });
     emit({ type: "events", events });
-    emit({ type: "chat_load", messages: chat.map((m) => ({ id: m.id, role: m.role, text: m.content })) });
     try {
       [models] = await Promise.all([loadModels().catch(() => null), loadBars()]);
     } catch (e: any) {
@@ -454,7 +410,6 @@ Reglas:
         if (b.funding) { for (const key of ["daily_guard_pct", "max_guard_pct", "target_pct"]) if (b.funding[key] !== undefined) patch[key] = b.funding[key]; if (b.funding.phase !== undefined) patch.phase = b.funding.phase; }
         for (const key of ["autotrade", "risk_pct", "max_open_trades", "use_time_exit", "compound", "daily_guard_pct", "max_guard_pct", "target_pct", "phase"]) if (b[key] !== undefined) patch[key] = b[key];
         if (b.strategies) { patch.strategies = {}; for (const n of Object.keys(b.strategies)) patch.strategies[n] = typeof b.strategies[n] === "object" ? b.strategies[n].enabled !== false : !!b.strategies[n]; }
-        if (b.chat_model) { await rpc("set_anthropic_key", { p_key: null, p_model: b.chat_model }); secrets = { ...secrets, chat_model: b.chat_model }; }
         if (!Object.keys(patch).length) { emit({ type: "settings", settings: settings() }); return { ok: true, settings: settings() }; }
         return patchSettings(patch);
       }
@@ -462,12 +417,6 @@ Reglas:
         const r = await patchSettings({ autotrade: !!body.on });
         emit({ type: "event", t: nowS(), level: body.on ? "warn" : "info", msg: `Operación automática ${body.on ? "ACTIVADA" : "desactivada"} desde la web${eaOnline() ? "" : " (se aplicará cuando el EA se conecte)"}` });
         return r;
-      }
-      case "POST /api/secret": {
-        await rpc("set_anthropic_key", { p_key: String(body.value ?? ""), p_model: null });
-        secrets = await rpc("my_secrets", {});
-        emit({ type: "state", state: { secrets } });
-        return { ok: true, has: secrets.anthropic };
       }
       case "POST /api/risk/reset": return command("reset_guards", {});
       case "POST /api/order": {
@@ -533,11 +482,6 @@ Reglas:
         return { ok: true };
       }
       case "GET /api/models": return { ready: fullState().models, history: [], training: null };
-      case "GET /api/chat": return { messages: chat.map((m) => ({ id: m.id, role: m.role, content: m.content })) };
-      case "DELETE /api/chat": { await supabase.from("chat_messages").delete().gt("id", 0); chat = []; return { ok: true }; }
-      case "POST /api/chat": { const text = String(body.text || "").trim(); if (!text) fail("mensaje vacío"); const id = Date.now() * 10 + Math.floor(Math.random() * 10); runChat(text, id); return { ok: true, id }; }
-      case "GET /api/notes": return { notes: notes.map((n) => ({ id: n.id, t: Math.floor(Date.parse(n.created_at) / 1000), text: n.text })) };
-      case "POST /api/notes": { const { data, error } = await supabase.from("notes").insert({ text: String(body.text || "").slice(0, 2000) }).select("*").single(); if (error) fail(error.message); notes.push(data); return { ok: true }; }
       case "POST /api/backtest": {
         if (!store) fail("Cargando velas…");
         const { runBacktestJob } = await import("../ai/backtest");
@@ -545,9 +489,8 @@ Reglas:
         return { ok: true };
       }
     }
-    if (method === "DELETE" && p.startsWith("/api/notes/")) { const id = Number(p.split("/").pop()); await supabase.from("notes").delete().eq("id", id); notes = notes.filter((n) => n.id !== id); return { ok: true }; }
     if (p.startsWith("/api/job/")) { const { jobState } = await import("../ai/backtest"); return jobState(p.split("/").pop() || ""); }
-    if (p.startsWith("/api/mq5")) fail("Las estrategias nuevas se añaden al EA: escribe en el chat qué quieres cambiar o pega el código MQ5 y te ayudo a integrarlo.");
+    if (p.startsWith("/api/mq5")) fail("Las estrategias nuevas se añaden al EA: pruébalas antes en el backtest («Estrategia de prueba»).");
     fail(`Ruta no disponible: ${method} ${p}`);
   }
 

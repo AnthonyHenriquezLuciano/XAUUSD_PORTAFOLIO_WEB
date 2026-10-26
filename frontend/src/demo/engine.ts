@@ -4,7 +4,6 @@
    tablas precalculadas por los modelos de IA. El chat usa Claude desde la propia página (capacidad "sample"). */
 
 import { emit as busEmit } from "../api";
-import { extractNotes, streamChat } from "../lib/chat";
 
 const D = (window as any).DEMO_DATA;
 const DAY = 86400;
@@ -617,46 +616,6 @@ function bars(tf: string, limit: number) {
   return out.slice(-limit);
 }
 
-// ------------------------------------------------------------------ chat con Claude (función de la nube con la API key del usuario)
-const RULES = `Eres el copiloto de trading de la app XAU Portfolio AI (oro, XAUUSD, MetaTrader 5), en su MODO DEMOSTRACIÓN: el mercado es una repetición de velas reales de octubre de 2026 en una cuenta simulada de 100.000 USD.
-Hablas en español, claro y directo. Ayudas a entender el mercado, evalúas las operaciones manuales del usuario y su estrategia manual, y explicas el portafolio automático (5 estrategias: LM, AORB, TOK, R50, ALB).
-Reglas:
-- Usa las herramientas para mirar datos reales de la app antes de opinar sobre el mercado o sobre una operación concreta.
-- Sé honesto: el modelo de dirección acierta ~50 % (no hay ventaja direccional demostrada); el cono de predicción es un rango de volatilidad calibrado, no una promesa. No inventes probabilidades ni resultados.
-- Al evaluar operaciones sé concreto: entrada, SL, gestión, momento, tamaño, alineación con el régimen; di qué harías distinto.
-- Si el usuario describe reglas de su estrategia manual, guárdalas con save_strategy_note.
-- No eres asesor financiero y no puedes ejecutar órdenes. Respuestas breves salvo que pidan detalle.`;
-const TOOLS = () => [
-  { name: "get_market_state", description: "Estado actual del mercado: régimen, volatilidad, sesión, niveles clave, cono de predicción, estrategias del portafolio y consejos.", execute: () => { updateSignals(); const s = { ...signals }; if (s.forecast) s.forecast = { points: s.forecast.points }; return s; } },
-  { name: "get_account", description: "Cuenta, posiciones abiertas, órdenes y estado de las reglas de fondeo (DD diario/máximo, objetivo).", execute: () => ({ account: account(), positions: posView(), orders, risk: riskView(), hora_servidor: new Date(cur().time * 1000).toISOString().slice(0, 16) }) },
-  { name: "get_trades", description: "Operaciones del diario con su evaluación automática. Devuelve las más recientes primero.", inputSchema: { type: "object", properties: { n: { type: "integer" }, source: { type: "string", enum: ["manual", "estrategia", "todas"] } } },
-    execute: (i: any) => journal.filter((t) => !i.source || i.source === "todas" || t.source === i.source).slice(0, Math.min(Number(i.n) || 15, 50)).map((t) => ({ ticket: t.ticket, source: t.source, strategy: t.strategy, side: t.side, lots: t.lots, entry: t.entry, sl: t.sl0, tp: t.tp0, apertura: new Date(t.t_open * 1000).toISOString().slice(0, 16), exit: t.exit, pnl: t.pnl, R: t.R, reason: t.reason, status: t.status, evaluacion: t.evaluation?.ok ? { score: t.evaluation.score, verdict: t.evaluation.verdict, timing: t.evaluation.timing, notes: t.evaluation.notes, regime: t.evaluation.regime, aligned: t.evaluation.aligned } : null })) },
-  { name: "evaluate_trade", description: "Evaluación detallada de una operación del diario por su ticket.", inputSchema: { type: "object", properties: { ticket: { type: "integer" } }, required: ["ticket"] },
-    execute: (i: any) => { const t = journal.find((x) => x.ticket === Number(i.ticket)); if (!t) throw new Error("no encontrada"); return evaluate({ side: t.side, entry: t.entry, sl: t.sl0, tp: t.tp0, t_open: t.t_open, t_close: t.t_close, exit: t.exit, lots: t.lots }); } },
-  { name: "get_strategy_notes", description: "Notas guardadas sobre la estrategia manual del usuario.", execute: () => notes.map((n) => n.text) },
-  { name: "save_strategy_note", description: "Guarda una regla o nota de la estrategia manual del usuario (cuando la explique).", inputSchema: { type: "object", properties: { text: { type: "string" } }, required: ["text"] },
-    execute: (i: any) => { notes.push({ id: Date.now(), t: Math.floor(Date.now() / 1000), text: String(i.text) }); return { ok: true }; } },
-  { name: "get_portfolio_stats", description: "Resultados históricos (2024-2026) del portafolio por estrategia y por escenario (régimen|volatilidad).", execute: () => ({ por_estrategia: D.scen.overall, por_escenario: Object.fromEntries(Object.entries(D.scen.table).filter(([, v]: any) => v.n >= 15)) }) },
-];
-async function runChat(text: string, id: number) {
-  chat.push({ id: Date.now(), role: "user", content: text });
-  emit({ type: "chat_start", id });
-  const notesTxt = notes.length ? `\n\nNotas de la estrategia manual del usuario:\n- ${notes.map((n) => n.text).join("\n- ")}` : "";
-  updateSignals();
-  const ctx = JSON.stringify({ mercado: { ...signals, forecast: signals.forecast?.points }, cuenta: account(), posiciones: posView(), riesgo: riskView(), diario: TOOLS()[2].execute({ n: 15 }) }).slice(0, 30000);
-  const system = RULES + "\n- Si el usuario explica una regla de su estrategia manual, añade al final una línea <nota>regla resumida</nota> para guardarla." + notesTxt + `\n\nDatos actuales de la app (JSON):\n${ctx}`;
-  const hist = chat.slice(-20).map((m) => ({ role: m.role, content: m.content }));
-  try {
-    const full = await streamChat(system, hist, (d) => emit({ type: "chat_delta", id, text: d }), settings.chat_model);
-    const { notes: nn } = extractNotes(full);
-    for (const t of nn) notes.push({ id: Date.now() + Math.random(), t: Math.floor(Date.now() / 1000), text: t });
-    chat.push({ id: Date.now(), role: "assistant", content: full });
-    emit({ type: "chat_end", id, text: full });
-  } catch (e: any) {
-    emit({ type: "chat_error", id, error: e?.message || "No se pudo obtener respuesta." });
-  }
-}
-
 // ------------------------------------------------------------------ API simulada (mismas rutas que server.py)
 const err = (m: string) => { const e = new Error(m); throw e; };
 const DESKTOP = "No disponible en el simulador: abre una cuenta conectada a tu MT5.";
@@ -725,9 +684,6 @@ export async function demoApi(path: string, method: string, body: any): Promise<
     case "GET /api/mq5": return { items: [] };
     case "POST /api/mq5/translate": case "POST /api/mq5/test": case "POST /api/mq5/check": err("Importar estrategias MQ5: " + DESKTOP);
     case "POST /api/import_csv": err(DESKTOP);
-    case "GET /api/chat": return { messages: chat.map((m) => ({ id: m.id, role: m.role, content: m.content })) };
-    case "DELETE /api/chat": chat.length = 0; return { ok: true };
-    case "POST /api/chat": { const text = String(body.text || "").trim(); if (!text) err("mensaje vacío"); const id = Date.now() * 10 + Math.floor(Math.random() * 10); runChat(text, id); return { ok: true, id }; }
     case "GET /api/notes": return { notes };
     case "POST /api/notes": notes.push({ id: Date.now(), t: Math.floor(Date.now() / 1000), text: body.text }); return { ok: true };
   }
