@@ -4,7 +4,7 @@ import type { Backend } from "../api";
 export async function createSim(): Promise<Backend> {
   const w = window as any;
   if (!w.DEMO_DATA) {
-    const r = await fetch("/demo/demo_data.json");
+    const r = await fetch(`${import.meta.env.BASE_URL}demo/demo_data.json`);
     if (!r.ok) throw new Error("No se pudieron cargar los datos del simulador");
     w.DEMO_DATA = await r.json();
   }
