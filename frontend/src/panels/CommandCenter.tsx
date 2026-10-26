@@ -4,6 +4,7 @@ import { supabase } from "../lib/supabase";
 import { fmt, useApp } from "../store";
 import { useUI } from "../uiState";
 import { riskSnapshot } from "../premium/risk";
+import { MetricCard } from "../components/DashboardPrimitives";
 import type { SmartAlerts } from "../premium/useSmartAlerts";
 
 type ModuleKey = "mission" | "radar" | "timeline" | "assistant" | "accounts" | "decisions" | "autopilot" | "events";
@@ -250,11 +251,16 @@ export default function CommandCenter({ alerts }: { alerts: SmartAlerts }) {
           </div>;
         })}</div>
       </div>}
-      <div className="premium-overview">
-        <div><span>Cuenta activa</span><b>{s.accountInfo?.name || "Simulación"}</b></div>
-        <div><span>Precio XAUUSD</span><b>{usd(s.tick?.bid)}</b></div>
-        <div><span>Balance</span><b>{usd(a.balance)}</b></div>
-        <div><span>Flotante</span><b className={Number(a.equity || 0) >= Number(a.balance || 0) ? "buy" : "sell"}>{usd(Number(a.equity || 0) - Number(a.balance || 0))}</b></div>
+      <div className="institutional-metric-grid overview-metrics">
+        <MetricCard label="Cuenta activa" value={s.accountInfo?.name || (s.sim?"Simulación":"No seleccionada")}
+          evidence={s.accountInfo?"direct":"unverified"} detail={s.broker==="cloud"?"Cuenta MT5":"Entorno de prueba"} />
+        <MetricCard label="Cotización XAUUSD · Bid" value={usd(s.tick?.bid)}
+          evidence={s.tick?"direct":"unverified"} detail={s.tick?"Última cotización recibida":"Sin cotización"} />
+        <MetricCard label="Balance de cuenta" value={usd(a.balance)}
+          evidence={a.balance!=null?"direct":"unverified"} />
+        <MetricCard label="Resultado flotante" tone={Number(a.equity??0)>=Number(a.balance??0)?"positive":"negative"}
+          value={a.equity!=null&&a.balance!=null?usd(Number(a.equity)-Number(a.balance)):"—"}
+          evidence={a.equity!=null&&a.balance!=null?"direct":"unverified"} />
       </div>
       <div className="premium-grid">
         {arr.map(id => {
