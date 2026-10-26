@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useReducer, useRef } from "react";
 import { api, openSocket } from "./api";
+import type { FlowResponse } from "./flow/engine";
 
 export type Tick = { time: number; bid: number; ask: number };
 export type Position = { ticket: number; symbol: string; side: number; volume: number; price_open: number; sl: number; tp: number; profit: number; swap: number; magic: number; comment: string; time: number };
@@ -37,6 +38,7 @@ export type AppState = {
   me?: string;
   accountInfo?: any;
   barsVersion: number;
+  flow?: FlowResponse | null;
   news?: any[];
   news_offset?: number;
 };
@@ -52,6 +54,7 @@ function reducer(s: AppState, m: any): AppState {
     case "socket": return { ...s, socket: m.open };
     case "reset": return { ...initial, socket: s.socket };
     case "bars": return { ...s, barsVersion: s.barsVersion + 1 };
+    case "flow": return { ...s, flow: m.flow };
     case "hello": return { ...s, ...m.state, signals: m.state?.signals && Object.keys(m.state.signals).length ? m.state.signals : s.signals };
     case "state": return { ...s, ...m.state };
     case "tick": return { ...s, tick: { time: m.t, bid: m.bid, ask: m.ask } };
