@@ -12,6 +12,7 @@ import Stats from "./panels/Stats";
 import Strategies from "./panels/Strategies";
 import Trade from "./panels/Trade";
 import CommandCenter from "./panels/CommandCenter";
+import ExecutionSafety from "./panels/ExecutionSafety";
 import PremiumLab from "./panels/PremiumLab";
 import { useSmartAlerts } from "./premium/useSmartAlerts";
 import "./premium.css";
@@ -29,6 +30,7 @@ const NAV: [string, string, string][] = [
   ["stats", "Estadísticas", "stats"],
   ["estrategias", "Estrategias", "strategies"],
   ["lab", "Lab", "lab"],
+  ["seguridad", "Seguridad", "shield-check"],
   ["ajustes", "Ajustes", "settings"],
 ];
 const CHART_VIEWS = new Set(["operar", "mercado", "flujo"]);
@@ -40,7 +42,7 @@ export default function App({ signedIn, onExitSim }: { signedIn: boolean; onExit
   const [logOpen, setLogOpen] = useState(false);
   const view = NAV.some(([k]) => k === ui.tab) ? ui.tab : "operar";
   const withChart = CHART_VIEWS.has(view);
-  const page = { centro: <CommandCenter alerts={alerts} />, sesiones: <RealSessions />, lab: <PremiumLab />, diario: <Journal />, stats: <Stats />, estrategias: <Strategies />, ajustes: <Settings /> }[view as "centro" | "sesiones" | "lab" | "diario" | "stats" | "estrategias" | "ajustes"];
+  const page = { centro: <CommandCenter alerts={alerts} />, sesiones: <RealSessions />, lab: <PremiumLab />, seguridad: <ExecutionSafety />, diario: <Journal />, stats: <Stats />, estrategias: <Strategies />, ajustes: <Settings /> }[view as "centro" | "sesiones" | "lab" | "seguridad" | "diario" | "stats" | "estrategias" | "ajustes"];
   return (
     <div className={`app ${withChart ? "v-chart" : "v-page"}`}>
       <Header onExitSim={onExitSim} />
