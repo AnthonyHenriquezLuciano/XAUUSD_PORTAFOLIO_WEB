@@ -23,7 +23,7 @@ const C = createContext<UI | null>(null);
 export function UIProvider({ children }: { children: React.ReactNode }) {
   const [preview, setPreview] = useState<Preview>(null);
   const [showForecast, setShowForecast] = useState(false);
-  const [tab, setTab] = useState("operar");
+  const [tab, setTab] = useState("centro");
   const [accountOpen, setAccountOpen] = useState(false);
   const [layers, setLayers] = useState<Record<string, boolean>>(() => {
     const def = { niveles: true, rangos: true, estrategias: true, operaciones: true };

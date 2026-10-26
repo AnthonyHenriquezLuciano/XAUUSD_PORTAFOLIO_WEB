@@ -4,6 +4,7 @@ import { Icon } from "../icons";
 import { fmt, pct, useApp } from "../store";
 import { useUI } from "../uiState";
 import { Card, Field, Num, ProbBar, Seg, Tip } from "../ui";
+import { ticketSafety } from "../premium/risk";
 
 const KIND_TXT = { market: "a mercado", limit: "límite", stop: "stop" };
 
@@ -45,21 +46,32 @@ export default function Trade() {
   // probabilidades del modelo al mover SL/TP
   const timer = useRef<number | null>(null);
   useEffect(() => {
-    if (!pv || !connected) { setPred(null); return; }
+    setPred(null);
+    if (!pv || !connected) return;
+    let active = true;
     if (timer.current) clearTimeout(timer.current);
     timer.current = window.setTimeout(() => {
-      api("/api/predict", "POST", { side: pv.side, entry: pv.entry, sl: pv.sl, tp: pv.tp, risk_pct: sizing === "risk" ? riskPct : undefined }).then(setPred).catch(() => {});
+      api("/api/predict", "POST", { side: pv.side, entry: pv.entry, sl: pv.sl, tp: pv.tp, risk_pct: sizing === "risk" ? riskPct : undefined })
+        .then((value) => { if (active) setPred(value); })
+        .catch(() => { if (active) setPred(null); });
     }, 250);
-  }, [pv?.sl, pv?.tp, Math.round((pv?.entry ?? 0) * 2), pv?.side, riskPct, sizing]);
+    return () => { active = false; if (timer.current) clearTimeout(timer.current); };
+  }, [pv?.sl, pv?.tp, Math.round((pv?.entry ?? 0) * 2), pv?.side, riskPct, sizing, connected]);
 
   const send = async () => {
     if (!pv) return;
+    const estimated = sizing === "lots" ? lots : pred?.lots;
+    const safety = ticketSafety(s, pv.entry, pv.sl, pv.side, estimated ?? 0);
+    if ((pv.entry - pv.sl) * pv.side <= 0 || (estimated != null && safety.blocked)) {
+      toast("La prevalidación de riesgo rechazó la orden. Revisa el ticket.", "error");
+      return;
+    }
     setBusy(true);
     try {
       const body: any = { side: pv.side, kind: pv.kind, sl: pv.sl, tp: pv.tp, price: pv.kind === "market" ? undefined : pv.entry };
       if (sizing === "lots") body.lots = lots; else body.risk_pct = riskPct;
       const r = await api("/api/order", "POST", body);
-      toast(`${pv.side > 0 ? "Compra" : "Venta"} ${r.lots ?? ""} lotes ${s.broker === "cloud" ? "ejecutada en MT5" : "enviada"}${r.price ? ` @ ${fmt(r.price)}` : ""}`, "ok");
+      toast(`${pv.side > 0 ? "Compra" : "Venta"} ${r.lots ?? ""} lotes confirmados por ${s.broker === "cloud" ? "MT5" : "el simulador"}${r.price ? ` @ ${fmt(r.price)}` : ""}`, "ok");
       ui.setPreview(null);
     } catch (e: any) {
       toast(e.message, "error");
@@ -70,7 +82,10 @@ export default function Trade() {
   const rr = pv && pv.tp && riskD ? Math.abs(pv.tp - pv.entry) / riskD : 0;
   const scaleRisk = s.broker === "sim" && sizing === "risk" && s.settings?.risk?.risk_pct ? riskPct / s.settings.risk.risk_pct : 1;
   const estLots = sizing === "lots" ? lots : pred ? Math.floor((pred.lots * scaleRisk) * 100) / 100 : null;
-  const contract = s.settings?.contract_size || 100;
+  const contract = s.settings?.contract_size || s.ea?.contract || 100;
+  const safety = pv ? ticketSafety(s, pv.entry, pv.sl, pv.side, estLots ?? 0) : null;
+  const validStop = !!pv && pv.sl > 0 && (pv.entry - pv.sl) * pv.side > 0;
+  const safetyBlock = !!pv && (!validStop || (estLots !== null && !!safety?.blocked));
   const set = (k: "entry" | "sl" | "tp") => (v: number) => ui.setPreview((p) => (p ? { ...p, [k]: v } : p));
 
   return (
@@ -111,6 +126,13 @@ export default function Trade() {
               <div><span>Beneficio</span><b className="buy">{pv.tp ? `+${fmt((estLots ?? 0) * Math.abs(pv.tp - pv.entry) * contract)}` : "—"}</b></div>
               <div><span>R:R</span><b>{rr ? `1:${rr.toFixed(1)}` : "—"}</b></div>
             </div>
+            <div className="premium-ticket-risk">
+              <div><span>Riesgo total hasta los stops*</span><b className="sell">{estLots !== null ? "−$" + fmt(safety?.combinedRisk) : "Calculando…"}</b></div>
+              <div><span>Margen hasta guardas de fondeo</span><b>{safety?.budget == null ? "—" : "$" + fmt(safety.budget)}</b></div>
+              <div><span>Posiciones sin SL</span><b className={safety?.exposure.withoutStop ? "sell" : ""}>{safety?.exposure.withoutStop ?? 0}</b></div>
+              <p>*Estimación; no incluye órdenes pendientes, gaps ni deslizamiento. MT5 y el EA validan el riesgo final.</p>
+            </div>
+            {safety?.notes.filter((n) => !n.startsWith("Spread actual")).map((note, i) => <div className="note warn" key={i}>{note}</div>)}
             <div className="order-ai">
               <span className="field-l">Próximas 4 h<Tip text="Qué suele pasar con una entrada así según la volatilidad, la hora y las distancias de SL/TP (modelo calibrado fuera de muestra). No predice la dirección." size={13} /></span>
               <ProbBar probs={pred?.pred?.probs} />
@@ -120,7 +142,7 @@ export default function Trade() {
             {s.risk?.blocked ? <div className="note bad">Cuenta bloqueada: {s.risk.blocked}</div> : null}
             {why ? <div className="note warn">{why}</div> : null}
             {dpWhy ? <div className="note bad">Protector de disciplina: {dpWhy}</div> : null}
-            <button className={`confirm ${pv.side > 0 ? "buy" : "sell"}`} disabled={busy || !canSend || !!dpWhy} onClick={send}>
+            <button className={`confirm ${pv.side > 0 ? "buy" : "sell"}`} disabled={busy || !canSend || !!dpWhy || safetyBlock} onClick={send}>
               {busy ? (s.broker === "cloud" ? "Enviando al EA…" : "Enviando…") : `Confirmar ${pv.side > 0 ? "COMPRA" : "VENTA"}`}
             </button>
           </div>

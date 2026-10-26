@@ -9,15 +9,21 @@ import Signals from "./panels/Signals";
 import Stats from "./panels/Stats";
 import Strategies from "./panels/Strategies";
 import Trade from "./panels/Trade";
+import CommandCenter from "./panels/CommandCenter";
+import PremiumLab from "./panels/PremiumLab";
+import { useSmartAlerts } from "./premium/useSmartAlerts";
+import "./premium.css";
 import { tstr, useApp } from "./store";
 import { useUI } from "./uiState";
 
 const NAV: [string, string, string][] = [
+  ["centro", "Centro", "home"],
   ["operar", "Operar", "trade"],
   ["mercado", "Mercado", "market"],
   ["diario", "Diario", "journal"],
   ["stats", "Estadísticas", "stats"],
   ["estrategias", "Estrategias", "strategies"],
+  ["lab", "Lab", "lab"],
   ["ajustes", "Ajustes", "settings"],
 ];
 const CHART_VIEWS = new Set(["operar", "mercado"]);
@@ -25,10 +31,11 @@ const CHART_VIEWS = new Set(["operar", "mercado"]);
 export default function App({ signedIn, onExitSim }: { signedIn: boolean; onExitSim?: () => void }) {
   const { s, toasts } = useApp();
   const ui = useUI();
+  const alerts = useSmartAlerts(s);
   const [logOpen, setLogOpen] = useState(false);
   const view = NAV.some(([k]) => k === ui.tab) ? ui.tab : "operar";
   const withChart = CHART_VIEWS.has(view);
-  const page = { diario: <Journal />, stats: <Stats />, estrategias: <Strategies />, ajustes: <Settings /> }[view as "diario"];
+  const page = { centro: <CommandCenter alerts={alerts} />, lab: <PremiumLab />, diario: <Journal />, stats: <Stats />, estrategias: <Strategies />, ajustes: <Settings /> }[view as "centro" | "lab" | "diario" | "stats" | "estrategias" | "ajustes"];
   return (
     <div className={`app ${withChart ? "v-chart" : "v-page"}`}>
       <Header onExitSim={onExitSim} />
