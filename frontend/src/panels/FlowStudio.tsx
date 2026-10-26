@@ -27,20 +27,20 @@ export default function FlowStudio() {
   const distance = (price: number) => d?.price == null ? "—" : (price - d.price >= 0 ? "+" : "") + fmt(price - d.price) + " $";
   return <div className="flow-studio stack">
     <header className="flow-title">
-      <div><span className="premium-eyebrow">DATOS DE MERCADO / MICROESTRUCTURA</span><h2>Flujo y liquidez</h2></div>
+      <div><span className="premium-eyebrow">DATOS DE MERCADO / MICROESTRUCTURA</span><h2>Order Flow</h2></div>
       <span className="flow-proxy-badge">TICK VOLUME</span>
     </header>
     <div className="flow-segment" role="group" aria-label="Modos de análisis">
       {MODES.map(([key,name])=><button key={key} className={f.mode===key?"on":""}
-        onClick={()=>ui.setFlow({mode:key})} title={key==="fixed"?"Se dibuja con la herramienta VP de Dibujo":""}>{name}</button>)}
+        onClick={()=>ui.setFlow({mode:key})} aria-pressed={f.mode===key} title={key==="fixed"?"Se dibuja con la herramienta VP de Dibujo":""}>{name}</button>)}
     </div>
     {f.mode === "session" && <div className="flow-segment compact" role="group" aria-label="Sesión">
-      {SCOPES.map(([key,name])=><button key={key} className={f.scope===key?"on":""} onClick={()=>ui.setFlow({scope:key})}>{name}</button>)}
+      {SCOPES.map(([key,name])=><button key={key} className={f.scope===key?"on":""} onClick={()=>ui.setFlow({scope:key})} aria-pressed={f.scope===key}>{name}</button>)}
     </div>}
     <div className="flow-section">
       <span className="flow-section-caption">ENFOQUE · FILTRAR LO VISIBLE</span>
       <div className="flow-segment compact" role="group" aria-label="Modo Focus">
-        {VIEWS.map(([key,name])=><button key={key} className={f.focus===key?"on":""} onClick={()=>ui.setFlow({focus:key})}>{name}</button>)}
+        {VIEWS.map(([key,name])=><button key={key} className={f.focus===key?"on":""} onClick={()=>ui.setFlow({focus:key})} aria-pressed={f.focus===key}>{name}</button>)}
       </div>
     </div>
     <div className="flow-toggles">

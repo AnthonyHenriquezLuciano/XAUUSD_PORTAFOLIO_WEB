@@ -375,7 +375,23 @@ export default function Chart() {
   const fc = s.signals?.forecast;
   const p4 = fc?.points?.find((p: any) => p.h === 4);
   return (
-    <div className="chartwrap">
+    <div className="chartwrap" role="region" aria-label="Gráfico interactivo de XAUUSD">
+      <div className="terminal-strip">
+        <div className="terminal-identity">
+          <span className="terminal-symbol">XAUUSD</span>
+          <span className="terminal-divider" />
+          <span className="terminal-market-label">Oro / dólar estadounidense</span>
+          <span className="terminal-tf">{tf}</span>
+        </div>
+        <div className="terminal-utility">
+          <span className={`terminal-connect ${connected ? "online" : ""}`}>
+            <span className="terminal-connect-dot" />{s.sim ? "Simulación" : !connected ? "Sin cuenta" : s.ea?.online ? "MT5 sincronizado" : "Datos disponibles · EA sin conexión"}
+          </span>
+          <button className="terminal-link" onClick={()=>ui.setTab("seguridad")} title="Ver salud de las órdenes y del puente MT5">
+            <Icon name="shield-check" size={14}/> Riesgo
+          </button>
+        </div>
+      </div>
       <div className="toolbar">
         <div className="seg">
           {Object.keys(TF_SEC).map((k) => <button key={k} className={tf === k ? "on" : ""} onClick={() => setTf(k)}>{k}</button>)}
@@ -391,12 +407,12 @@ export default function Chart() {
             </div>
           ) : null}
         </div>
-        <button className="btn sm" title="Perfil de volumen, POC, VWAP y FVG" onClick={() => ui.setTab("flujo")}>Flujo</button>
-        <button className="btn sm" title="Horarios reales de Tokio, Londres y Nueva York" onClick={() => ui.setTab("sesiones")}>Sesiones reales</button>
+        <button className="btn sm" title="Perfil de volumen, POC, VWAP y FVG" onClick={() => ui.setTab("flujo")}>Order Flow</button>
+        <button className="btn sm" title="Horarios de Tokio, Londres y Nueva York" onClick={() => ui.setTab("sesiones")}>Sesiones</button>
         <button className={`btn sm ${drawOpen ? "on" : ""}`} title="Herramientas de dibujo" aria-pressed={drawOpen}
           onClick={() => { const v = !drawOpen; setDrawOpen(v); try { localStorage.setItem("xauai.drawopen", v ? "1" : "0"); } catch { /* sin almacenamiento */ } }}><Icon name="edit" size={14} />Dibujo</button>
         <div className="spacer" />
-        <button className={`btn sm ${ui.showForecast ? "on" : ""}`} onClick={() => ui.setShowForecast(!ui.showForecast)} disabled={!fc} aria-pressed={ui.showForecast} title="Rango probable de las próximas horas">Predicción</button>
+        <button className={`btn sm ${ui.showForecast ? "on" : ""}`} onClick={() => ui.setShowForecast(!ui.showForecast)} disabled={!fc} aria-pressed={ui.showForecast} title="Rango histórico estimado; no indica dirección futura">Rango estimado</button>
         {s.sim ? <SimControls /> : null}
       </div>
       <div className="chart">

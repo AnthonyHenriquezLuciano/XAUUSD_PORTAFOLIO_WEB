@@ -89,8 +89,22 @@ export default function Trade() {
   const set = (k: "entry" | "sl" | "tp") => (v: number) => ui.setPreview((p) => (p ? { ...p, [k]: v } : p));
 
   return (
-    <div className="stack">
-      <section className="ticket">
+    <div className="stack trading-desk">
+      <header className="desk-heading">
+        <div>
+          <span className="desk-eyebrow">OPERATIVA / EJECUCIÓN</span>
+          <h2>Trading Desk</h2>
+          <p>Preparación de órdenes y gestión de posiciones XAUUSD.</p>
+        </div>
+        <span className={`desk-status ${canSend ? "available" : ""}`}>{canSend ? (s.sim ? "SIMULADOR" : "MT5 DISPONIBLE") : "SOLO CONSULTA"}</span>
+      </header>
+      <section className="desk-prices" aria-label="Cotizaciones en tiempo real">
+        <div><span>Bid</span><strong>{t ? fmt(t.bid) : "—"}</strong></div>
+        <div><span>Ask</span><strong>{t ? fmt(t.ask) : "—"}</strong></div>
+        <div><span>Spread</span><strong>{t ? fmt(t.ask - t.bid) : "—"}</strong></div>
+      </section>
+      <section className="ticket" aria-label="Preparación de órdenes">
+        <div className="desk-section-caption"><span>CONFIGURAR ENTRADA</span><span className="dim">XAUUSD · {kind === "market" ? "Precio actual" : kind === "limit" ? "Orden límite" : "Orden stop"}</span></div>
         <div className="sides">
           <button className={`bigbtn sell ${pv && pv.side > 0 ? "off" : ""} ${pv && pv.side < 0 ? "sel" : ""}`} disabled={!t} onClick={() => start(-1)}>
             <span>VENDER</span><span className="p">{t ? fmt(t.bid) : "–"}</span>

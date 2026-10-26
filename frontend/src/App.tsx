@@ -21,6 +21,7 @@ import "./premium.css";
 import "./flow/flow.css";
 import "./design-system.css";
 import "./navigation.css";
+import "./workspace.css";
 import { tstr, useApp } from "./store";
 import { useUI } from "./uiState";
 

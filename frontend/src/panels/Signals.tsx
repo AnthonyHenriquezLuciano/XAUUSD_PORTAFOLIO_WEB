@@ -16,7 +16,13 @@ export default function Signals() {
   const metrics = fc?.metrics || {};
   const strats = (g.strategies || []).filter((x: any) => x.enabled);
   return (
-    <div className="stack">
+    <div className="stack market-inspector">
+      <header className="desk-heading">
+        <div><span className="desk-eyebrow">ANÁLISIS / CONTEXTO</span>
+          <h2>Estado del mercado</h2>
+          <p>Volatilidad, estructura y escenarios históricos.</p>
+        </div>
+      </header>
       <Card title="Escenario" right={<span className="muted">{g.hour} · {g.session}</span>}>
         <div className="chips">
           <span className={`chip ${REG[g.regime]?.[1]}`}>{REG[g.regime]?.[0]}</span>
@@ -49,7 +55,7 @@ export default function Signals() {
         </table>
       </Card>
 
-      <Card title="Próximas horas" tip="Rango donde el precio terminó el 80 % de las veces en situaciones de volatilidad parecida. La dirección no es predecible: «Sube» ronda el 50 %."
+      <Card title="Rangos estadísticos" tip="Rango donde el precio terminó el 80 % de las veces en situaciones de volatilidad parecida. La dirección no es predecible: «Sube» ronda el 50 %."
         right={fc?.points ? <button className={`btn xs ${ui.showForecast ? "on" : ""}`} onClick={() => ui.setShowForecast(!ui.showForecast)}>{ui.showForecast ? "Ocultar del gráfico" : "Ver en el gráfico"}</button> : null}>
         {fc?.points ? (
           <table className="t">
@@ -67,7 +73,7 @@ export default function Signals() {
         ) : <div className="empty-s">Sin predicción todavía.</div>}
       </Card>
 
-      <Card title="Niveles">
+      <Card title="Niveles de referencia">
         <table className="t"><tbody>
           {(g.levels || []).slice().sort((a: any, b: any) => b.price - a.price).map((l: any) => {
             const d = s.tick ? l.price - s.tick.bid : null;

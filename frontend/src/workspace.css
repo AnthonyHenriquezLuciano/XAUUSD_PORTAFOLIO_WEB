@@ -1,0 +1,66 @@
+/* Stage 3 · Trading Terminal Workspace */
+.chartwrap{grid-template-rows:auto auto minmax(0,1fr);background:#0d1115}
+.terminal-strip{display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0;min-height:45px;padding:9px 14px;
+  border-bottom:1px solid #2D343C;background:linear-gradient(90deg,#1B2127,#12171C)}
+.terminal-identity,.terminal-utility{display:flex;align-items:center;gap:11px;min-width:0}
+.terminal-symbol{font:650 14px var(--mono);letter-spacing:.025em;color:#F4F0E7;white-space:nowrap}
+.terminal-divider{height:17px;width:1px;background:#49525B}
+.terminal-market-label{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.terminal-tf{font:600 10px var(--mono);padding:4px 7px;background:rgba(200,170,120,.1);color:var(--gold-hi);border-radius:5px}
+.terminal-connect{display:inline-flex;align-items:center;gap:7px;color:var(--muted);font-size:11px;white-space:nowrap}
+.terminal-connect-dot{background:#7F8B97;border-radius:50%;width:7px;height:7px;flex:none}
+.terminal-connect.online .terminal-connect-dot{background:var(--buy);box-shadow:0 0 0 3px rgba(79,197,155,.12)}
+.terminal-link{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;border:1px solid var(--line);
+  border-radius:7px;background:transparent;color:#C6CCD2;font-size:11px;padding:6px 9px;cursor:pointer}
+.terminal-link:hover{color:var(--gold-hi);background:rgba(200,170,120,.08);border-color:#6D614F}
+.toolbar{background:#14191F;border-color:var(--line);padding:6px 12px;min-height:46px;gap:7px}
+.toolbar .seg{background:#101419;border-color:#2A323B}
+.chart{background:#0d1014}
+.chart-legend{top:12px;left:12px;max-width:calc(100% - 24px)}
+.chart-legend .ohlc{background:rgba(15,20,26,.87);border:1px solid rgba(61,71,82,.55);padding:5px 8px;border-radius:7px;backdrop-filter:blur(8px)}
+.chart-legend .box{background:rgba(17,23,29,.88);border-color:rgba(61,71,82,.55)}
+.side{padding:14px 14px 28px}
+.side>.stack{gap:14px}
+.desk-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:9px;border-bottom:1px solid var(--line);padding:2px 0 13px}
+.desk-heading h2{font-size:18px;line-height:1.2;font-weight:600;letter-spacing:-.045em;margin:4px 0}
+.desk-heading p{margin:5px 0 0;color:var(--muted);font-size:12px;line-height:1.55}
+.desk-eyebrow{font-size:9px;font-weight:700;letter-spacing:1.05px;color:var(--gold)}
+.desk-status{flex:none;font:650 9px var(--mono);border-radius:5px;padding:5px 7px;border:1px solid #47505A;color:var(--muted);background:#1c2228;white-space:nowrap}
+.desk-status.available{color:var(--buy);border-color:rgba(79,197,155,.25);background:rgba(79,197,155,.06)}
+.desk-prices{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+.desk-prices>div{background:#1A2026;border:1px solid var(--line);padding:10px 8px;border-radius:9px;display:flex;flex-direction:column;gap:7px;min-width:0}
+.desk-prices span{font-size:10px;color:var(--muted);font-weight:550}
+.desk-prices strong{font:600 13px var(--mono);overflow-wrap:anywhere;color:var(--text)}
+.desk-section-caption{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:10px;font-weight:650;color:var(--muted);letter-spacing:.045em}
+.desk-section-caption .dim{font-weight:450;letter-spacing:0;text-align:right}
+.trading-desk .ticket{padding:0;background:transparent}
+.trading-desk .sides{gap:9px}
+.trading-desk .bigbtn{min-height:68px;border-radius:10px}
+.trading-desk .seg.full{background:#10161B}
+.trading-desk .order{padding:15px;border-radius:10px;border:1px solid #3C4650;border-top:3px solid var(--buy)}
+.trading-desk .order.is-sell{border-top-color:var(--sell)}
+.trading-desk .order-h b{font-size:14px}
+.trading-desk .confirm{min-height:44px}
+.market-inspector .chips{gap:5px}
+.market-inspector .card{border:1px solid var(--line)}
+.flow-studio .flow-section{gap:12px}
+.flow-studio .flow-price-head{padding-bottom:13px}
+.flow-studio .flow-price-grid{gap:8px}
+.flow-studio .flow-price-grid>div{background:#151B21;border-color:#313A43}
+@media(max-width:1024px){.terminal-market-label{display:none}.terminal-strip{padding:8px 12px}}
+@media(max-width:860px){
+ .chartwrap{height:64vh;min-height:390px;grid-template-rows:auto auto minmax(0,1fr)}
+ .terminal-strip{min-height:40px}
+ .terminal-connect{max-width:138px;overflow:hidden;text-overflow:ellipsis}
+ .terminal-link{min-height:30px}
+ .toolbar{overflow-x:auto;padding:6px 8px;flex-wrap:nowrap}
+ .side{padding:14px}
+ .desk-prices strong{font-size:14px}
+}
+@media(max-width:480px){
+ .terminal-utility{gap:6px}
+ .terminal-connect{max-width:95px;font-size:10px}
+ .terminal-market-label{display:none}
+ .chartwrap{height:60vh;min-height:370px}
+ .desk-heading h2{font-size:16px}
+}
