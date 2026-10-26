@@ -17,7 +17,7 @@ type LineDef = {
 };
 
 export default function Chart() {
-  const { s, toast } = useApp();
+  const { s, toast, dispatch } = useApp();
   const ui = useUI();
   const el = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -139,6 +139,26 @@ export default function Chart() {
     return () => clearInterval(id);
   }, [connected, s.strategies.map((x) => x.state).join()]);
 
+  // Session Intelligence se calcula en M1 (no en la temporalidad visible) y
+  // se comparte entre inspector y primitive. Si la cuenta cambia se descarta.
+  useEffect(() => {
+    let active = true;
+    if (!connected || s.broker !== "cloud") { dispatch({type:"flow", flow:null}); return; }
+    const fp = ui.flow;
+    if (fp.mode === "fixed" && (!(fp.start && fp.end) || fp.end <= fp.start)) {
+      dispatch({type:"flow",flow:null}); return;
+    }
+    const qs = new URLSearchParams({mode:fp.mode, scope:fp.scope,bins:String(fp.bins)});
+    if (fp.mode === "fixed") {qs.set("start",String(fp.start));qs.set("end",String(fp.end));}
+    const refresh = () => api("/api/flow?"+qs.toString())
+      .then(d=>{if(active)dispatch({type:"flow",flow:d});})
+      .catch(()=>{if(active)dispatch({type:"flow",flow:null});});
+    void refresh();
+    const timer=window.setInterval(refresh,30000);
+    return () => { active=false; window.clearInterval(timer); };
+  }, [connected,s.broker,s.accountInfo?.id,s.barsVersion,ui.flow.mode,ui.flow.scope,
+      ui.flow.start,ui.flow.end,ui.flow.bins]);
+
   // operaciones del diario (trazos entrada → salida en la capa de dibujo)
   useEffect(() => {
     if (!connected) { setTrades([]); return; }
@@ -218,6 +238,8 @@ export default function Chart() {
       : [];
     ov.setData({
       tf: TF_SEC[tf], times: () => timesRef.current, nowT: last, atr: s.signals?.atr, theme: th,
+      flow: s.flow, flowFocus: ui.flow.focus,
+      flowLayers: {profile:ui.layers.flujo !== false, fvg:ui.layers.fvg !== false},
       layers: { rangos: !!ui.layers.rangos, sesionesReales: ui.layers.sesionesReales !== false, niveles: !!ui.layers.niveles, estrategias: !!ui.layers.estrategias, operaciones: !!ui.layers.operaciones, rr: ui.chart.rr },
       realSessions,
       zones: overlays?.zones || [], levels: s.signals?.levels || [], strategies: s.strategies || [],
@@ -228,7 +250,7 @@ export default function Chart() {
         .map((n: any) => ({ t: n.ts + (s.news_offset ?? 7200), title: n.title, impact: n.impact })),
       newsWindow: s.settings?.extra?.news_enabled ? { before: Number(s.settings.extra.news_before || 0), after: Number(s.settings.extra.news_after || 0) } : null,
     });
-  }, [th.id, tf, overlays, s.signals, s.strategies, trades, s.positions, ui.preview, ui.layers, ui.chart.rr, ui.showForecast, s.barsVersion, s.news, s.news_offset, s.settings?.extra, lastRef.current?.time, s.tick?.time ? Math.floor(s.tick.time / 30) : 0]);
+  }, [th.id, tf, overlays, s.signals, s.strategies, trades, s.positions, ui.preview, ui.layers, ui.chart.rr, ui.showForecast, s.barsVersion, s.news, s.news_offset, s.flow, ui.flow.focus, s.settings?.extra, lastRef.current?.time, s.tick?.time ? Math.floor(s.tick.time / 30) : 0]);
 
   useEffect(() => {
     const c = candleRef.current;
@@ -358,13 +380,14 @@ export default function Chart() {
           <button className={`btn sm ${layersOpen ? "on" : ""}`} onClick={() => setLayersOpen(!layersOpen)} aria-expanded={layersOpen}>Capas <Icon name="chevron" size={13} /></button>
           {layersOpen ? (
             <div className="layers-menu" onMouseLeave={() => setLayersOpen(false)}>
-              {([["rangos", "Rangos del EA (ALB/TOK/AORB)", th.zone.asia], ["sesionesReales", "Sesiones reales (Tokio/Londres/NY)", "#d8ad61"], ["niveles", "Niveles clave", th.level.pd], ["estrategias", "Órdenes de las estrategias", th.buy], ["operaciones", "Operaciones (entrada → salida)", th.win], ["noticias", "Noticias USD", th.sl]] as [string, string, string][]).map(([k, l, c]) => (
+              {([["rangos", "Rangos del EA (ALB/TOK/AORB)", th.zone.asia], ["sesionesReales", "Sesiones reales (Tokio/Londres/NY)", "#d8ad61"], ["flujo", "Perfil de volumen y POC", "#e5bf7c"], ["fvg", "Ineficiencias FVG", "#16b07a"], ["niveles", "Niveles clave", th.level.pd], ["estrategias", "Órdenes de las estrategias", th.buy], ["operaciones", "Operaciones (entrada → salida)", th.win], ["noticias", "Noticias USD", th.sl]] as [string, string, string][]).map(([k, l, c]) => (
                 <label key={k} className="layer-item"><input type="checkbox" checked={ui.layers[k] !== false} onChange={(e) => ui.setLayer(k, e.target.checked)} /><i style={{ background: c }} />{l}</label>
               ))}
               <label className="layer-item"><input type="checkbox" checked={ui.chart.rr} onChange={(e) => ui.setChart({ rr: e.target.checked })} /><i style={{ background: th.tp }} />Zonas de riesgo / beneficio</label>
             </div>
           ) : null}
         </div>
+        <button className="btn sm" title="Perfil de volumen, POC, VWAP y FVG" onClick={() => ui.setTab("flujo")}>Flujo</button>
         <button className="btn sm" title="Horarios reales de Tokio, Londres y Nueva York" onClick={() => ui.setTab("sesiones")}>Sesiones reales</button>
         <button className={`btn sm ${drawOpen ? "on" : ""}`} title="Herramientas de dibujo" aria-pressed={drawOpen}
           onClick={() => { const v = !drawOpen; setDrawOpen(v); try { localStorage.setItem("xauai.drawopen", v ? "1" : "0"); } catch { /* sin almacenamiento */ } }}><Icon name="edit" size={14} />Dibujo</button>
@@ -375,6 +398,7 @@ export default function Chart() {
       <div className="chart">
         <div ref={el} style={{ position: "absolute", inset: 0 }} />
         <DrawingTools ready={ready && connected} open={drawOpen && connected} box={el} chartRef={chartRef} candleRef={candleRef} timesRef={timesRef} barsRef={barsRef}
+          onProfileRange={(range) => {if(range) ui.setFlow({mode:"fixed",start:range.start,end:range.end});}}
           tf={TF_SEC[tf]} theme={th} drawKey={!connected ? null : s.broker === "cloud" && s.accountInfo?.id ? { cloud: true, account: s.accountInfo.id } : s.broker === "sim" || s.sim ? { cloud: false, account: "sim" } : null} />
         <div className={`chart-legend ${drawOpen && connected ? "shift" : ""}`}>
           {s.tick || hover ? (
