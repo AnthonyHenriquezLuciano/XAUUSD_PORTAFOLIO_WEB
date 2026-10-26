@@ -69,8 +69,8 @@ export default function PremiumLab() {
   const lots = sizePerLot > 0 ? Math.floor((balance * riskPct / 100 / sizePerLot) * 100) / 100 : 0;
   const preflight = ticketSafety(s, entry, sl, side, lots);
   const live = s.tick;
-  const completed = trades.filter(t => t.status === "cerrada" && Number.isFinite(Number(t.R)));
-  const rs = useMemo(() => completed.map(t => Number(t.R)).filter(Number.isFinite).slice(-500), [trades]);
+  const completed = trades.filter(t => t.status === "cerrada" && t.R != null && Number.isFinite(Number(t.R)));
+  const rs = useMemo(() => trades.filter(t => t.status === "cerrada" && t.R != null).map(t => Number(t.R)).filter(Number.isFinite).slice(-500), [trades]);
   const mc = useMemo(() => rs.length >= 10 ? bootstrap(rs, safe(riskPct, .05, 3), 1000, seed) : null, [rs, riskPct, seed]);
   const ordered = useMemo(() => [...trades].filter(t => t.status === "cerrada").sort((a, b) => a.t_close - b.t_close), [trades]);
   const replay = ordered[Math.min(Math.max(0, replayIndex), ordered.length - 1)];
