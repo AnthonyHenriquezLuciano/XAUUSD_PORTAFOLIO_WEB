@@ -44,3 +44,32 @@
 .flow-gap>b { font:650 10.5px var(--mono); }
 .flow-gap>small { color:var(--muted); }
 @media(max-width:680px) { .flow-studio { padding-bottom:6px; } .flow-price-head strong { font-size:20px; } }
+
+/* Institutional Flow 2.0: provenance-first pressure and level reach inspector */
+.flow-pressure-card{gap:13px;background:linear-gradient(155deg,#1e252b,#12181f)}
+.flow-pressure-top{display:flex;align-items:center;justify-content:space-between;gap:9px}
+.flow-pressure-top>div{display:flex;flex-direction:column;gap:5px;min-width:0}
+.flow-pressure-top strong{font-size:13px;font-weight:650;letter-spacing:-.01em;line-height:1.4}
+.flow-pressure-top small{font:10.5px var(--mono);color:var(--muted)}
+.flow-rvol{flex:none;padding:7px;border:1px solid #586150;border-radius:7px;color:var(--gold-hi);background:rgba(200,170,120,.08);font:600 12px var(--mono)}
+.flow-pressure-balance{display:flex;flex-direction:column;gap:7px}
+.flow-pressure-ends{display:flex;align-items:center;justify-content:space-between;font:650 10.5px var(--mono)}
+.flow-pressure-meter{height:8px;border-radius:8px;background:linear-gradient(90deg,#842d3b,#b94353);overflow:hidden}
+.flow-pressure-meter>div{height:100%;background:linear-gradient(90deg,#287d65,#42bd94);border-radius:8px 0 0 8px;transition:width .2s ease}
+.flow-indicator-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.flow-indicator-grid>div{display:flex;flex-direction:column;gap:5px;padding:11px 10px;border:1px solid #313b44;background:#151c23;border-radius:8px;min-width:0}
+.flow-indicator-grid span{font-size:10.5px;color:var(--muted)}
+.flow-indicator-grid b{font:600 17px var(--mono);color:var(--text);overflow-wrap:anywhere}
+.flow-indicator-grid b.buy{color:var(--buy)}.flow-indicator-grid b.sell{color:var(--sell)}
+.flow-indicator-grid small{font-size:10px;color:var(--dim);line-height:1.5}
+.flow-profile-context{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+.flow-profile-context>div{display:flex;flex-direction:column;gap:5px;background:#161d24;border:1px solid var(--line);padding:9px;border-radius:7px}
+.flow-profile-context span{font-size:10px;color:var(--muted)}
+.flow-profile-context b{font:600 14px var(--mono);color:var(--gold-hi)}
+.flow-position-label{font-size:11px;color:#a9b5c1;line-height:1.5;margin:0}
+.flow-level-prob{padding:10px 0;align-items:center}
+.flow-level-prob>div{gap:5px}
+.flow-level-prob>div small{line-height:1.4}
+.flow-level-prob .flow-reach{display:flex;align-items:flex-end;flex-direction:column;gap:4px;min-width:70px;font:700 15px var(--mono);color:var(--gold-hi)}
+.flow-level-prob .flow-reach small{font:500 9.5px var(--font);color:var(--muted);white-space:nowrap}
+@media(prefers-reduced-motion:reduce){.flow-pressure-meter>div{transition:none}}
