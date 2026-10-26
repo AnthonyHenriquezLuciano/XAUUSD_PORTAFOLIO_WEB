@@ -69,6 +69,9 @@ export default function FlowStudio() {
         <div><span>VAL</span><b>{fmt(p.val)}</b></div>
         <div><span>VWAP*</span><b>{p.vwap!=null?fmt(p.vwap):"—"}</b></div>
       </div>
+      <div className="flow-nodes">
+        <div><span>VWAP ±1σ / ±2σ (proxy de dispersión M1)</span><b>{p.vwapBands?.length===4?p.vwapBands.map(x=>fmt(x)).join(" / "):"No disponible"}</b></div>
+      </div>
       <div className="flow-line"><span>Precio vs POC</span><b className={d.direction==="above_poc"?"buy":d.direction==="below_poc"?"sell":"gold"}>{d.direction==="above_poc"?"Sobre POC":d.direction==="below_poc"?"Bajo POC":"En POC / sin datos"}</b></div>
       <div className="flow-nodes">
         <div><span>HVN · Aceptación relativa</span><b>{p.hvn.length?p.hvn.map(v=>fmt(v)).join(" · "):"No detectados"}</b></div>
@@ -84,6 +87,14 @@ export default function FlowStudio() {
           <span className={x.side==="above"?"buy":x.side==="below"?"sell":"dim"}>{distance(x.price)}</span>
         </div>)}
       {!top.length && <p className="premium-note">Sin niveles confiables para esta muestra.</p>}
+    </section>}
+    {d && showLevels && <section className="flow-section">
+      <span className="flow-section-caption">BARRIDOS RECHAZADOS · LIQUIDEZ ESTRUCTURAL</span>
+      {(d.sweeps||[]).slice(-5).reverse().map((x,i)=><div key={x.time+"-"+i} className="flow-gap">
+        <span className={x.side==="high"?"sell":"buy"}>{x.side==="high"?"Barrido máximo":"Barrido mínimo"}</span>
+        <b>{fmt(x.level)}</b><small>{fmt(x.rejection)} USD</small></div>)}
+      {!d.sweeps?.length&&<p className="premium-note">Sin barridos confirmados por velas M5 cerradas.</p>}
+      <p className="premium-note">Una mecha con recuperación del nivel es una estructura de precio, no evidencia de órdenes institucionales.</p>
     </section>}
     {d && showGaps && <section className="flow-section">
       <span className="flow-section-caption">INEFICIENCIAS · FAIR VALUE GAPS M5</span>
