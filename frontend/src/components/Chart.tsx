@@ -127,7 +127,7 @@ export default function Chart() {
     api(`/api/bars?tf=${tf}&limit=3000`).then((d) => {
       if (cancel || !candleRef.current) return;
       if (!Array.isArray(d?.bars)) throw new Error("La respuesta del histórico no contiene velas.");
-      const bars = d.bars.map((b: any) => ({
+      const bars: Array<{time: UTCTimestamp;open:number;high:number;low:number;close:number;volume:number}> = d.bars.map((b: any) => ({
         time: Number(b.time) as UTCTimestamp,
         open: Number(b.open), high: Number(b.high),
         low: Number(b.low), close: Number(b.close), volume: Number(b.volume || 0),
