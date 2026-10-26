@@ -244,7 +244,8 @@ export class ChartOverlay implements ISeriesPrimitive<Time> {
         const isProfile=["POC","VAH","VAL","VWAP"].includes(l.key);
         const color=isProfile?"#dfba78":"#a9b7c6";
         const result=study.get(l.key as import("../flow/reach").ReachKey);
-        const pocBin=d.flow.profile?.bins.find(b=>d.flow?.profile?.poc!=null && d.flow.profile.poc>=b.low && d.flow.profile.poc<=b.high);
+        const pocPrice=d.flow.profile?.poc;
+        const pocBin=pocPrice!=null?d.flow.profile?.bins.find(b=>pocPrice>=b.low&&pocPrice<=b.high):undefined;
         const labelShare=l.key==="POC"&&pocBin?" · "+(pocBin.share*100).toFixed(1)+"% actividad":
           (l.key==="VAH"||l.key==="VAL")?" · VA 70% actividad":" · N/D";
         const suffix=result?.percent!=null?" · "+result.percent.toFixed(0)+"% toque/2h":labelShare;
