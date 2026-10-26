@@ -236,11 +236,15 @@ export default function Chart() {
           brokerOffset
         )
       : [];
+    const focused = ui.tab === "flujo" && ui.flow.focus !== "all";
+    const structure = !focused || ui.flow.focus === "structure";
     ov.setData({
       tf: TF_SEC[tf], times: () => timesRef.current, nowT: last, atr: s.signals?.atr, theme: th,
-      flow: s.flow, flowFocus: ui.flow.focus,
+      flow: s.flow, flowFocus: ui.tab === "flujo" ? ui.flow.focus : "all",
       flowLayers: {profile:ui.layers.flujo !== false, fvg:ui.layers.fvg !== false},
-      layers: { rangos: !!ui.layers.rangos, sesionesReales: ui.layers.sesionesReales !== false, niveles: !!ui.layers.niveles, estrategias: !!ui.layers.estrategias, operaciones: !!ui.layers.operaciones, rr: ui.chart.rr },
+      layers: { rangos: !!ui.layers.rangos && structure, sesionesReales: ui.layers.sesionesReales !== false && !focused,
+        niveles: !!ui.layers.niveles && structure, estrategias: !!ui.layers.estrategias && !focused,
+        operaciones: !!ui.layers.operaciones && !focused, rr: ui.chart.rr && !focused },
       realSessions,
       zones: overlays?.zones || [], levels: s.signals?.levels || [], strategies: s.strategies || [],
       trades: trades.filter((t) => t.status !== "abierta"), positions: s.positions,
@@ -250,7 +254,7 @@ export default function Chart() {
         .map((n: any) => ({ t: n.ts + (s.news_offset ?? 7200), title: n.title, impact: n.impact })),
       newsWindow: s.settings?.extra?.news_enabled ? { before: Number(s.settings.extra.news_before || 0), after: Number(s.settings.extra.news_after || 0) } : null,
     });
-  }, [th.id, tf, overlays, s.signals, s.strategies, trades, s.positions, ui.preview, ui.layers, ui.chart.rr, ui.showForecast, s.barsVersion, s.news, s.news_offset, s.flow, ui.flow.focus, s.settings?.extra, lastRef.current?.time, s.tick?.time ? Math.floor(s.tick.time / 30) : 0]);
+  }, [th.id, tf, overlays, s.signals, s.strategies, trades, s.positions, ui.preview, ui.layers, ui.chart.rr, ui.showForecast, s.barsVersion, s.news, s.news_offset, s.flow, ui.flow.focus, ui.tab, s.settings?.extra, lastRef.current?.time, s.tick?.time ? Math.floor(s.tick.time / 30) : 0]);
 
   useEffect(() => {
     const c = candleRef.current;
