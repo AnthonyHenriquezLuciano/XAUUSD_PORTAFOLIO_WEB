@@ -5,6 +5,8 @@
  */
 import { BarStore, dayOf, dowOf, lowerBound } from "../ai/bars";
 import { chartSessionWindows, type SessionId } from "../sessions/marketSessions";
+import { volumePressure, type FlowPressure } from "./volumeSignals";
+import type { ReachEvidence } from "./reach";
 
 export type FlowMode = "session" | "fixed" | "recent";
 export type FlowScope = SessionId | "day";
@@ -21,6 +23,7 @@ export type FlowLevel = { key: string; label: string; price: number; source: str
 export type FlowResponse = {
   ok: boolean; mode: FlowMode; scope: FlowScope; title: string; profile: FlowProfile | null;
   levels: FlowLevel[]; gaps: Gap[]; sweeps: Sweep[]; price: number | null; vwap: number | null;
+  pressure: FlowPressure | null; reach?: ReachEvidence[];
   direction: "above_poc" | "below_poc" | "at_poc" | "unknown";
   evidence: string[]; quality: { validBars: number; withVolume: number; coveragePct: number; cutoff: number; disclaimer: string };
 };
@@ -186,6 +189,9 @@ export function buildFlow(st: BarStore, now: number, opts: {
     } else return empty(mode, scope, cutoff, "Conecta MT5 para identificar el reloj del bróker", price);
   }
   const profile = volumeProfile(st, start, end, cutoff, opts.bins ?? 64);
+  // Directional tick pressure always describes the latest six hours, even when the
+  // selected historical session has already closed.
+  const pressure = volumePressure(st, cutoff - 6 * 3600, cutoff + 1, cutoff);
   const gaps = fairValueGaps(st, cutoff, 5, 12);
   const sweeps = detectSweeps(st, cutoff, 5, 12);
   const levels: FlowLevel[] = [];
@@ -226,7 +232,7 @@ export function buildFlow(st: BarStore, now: number, opts: {
   ] : ["No hay suficientes velas con tick volume para calcular el perfil sin inventar datos."];
   const validBars = profile?.bars || 0;
   return {
-    ok: !!profile, mode, scope, title, profile, levels, gaps, sweeps, price,
+    ok: !!profile, mode, scope, title, profile, levels, gaps, sweeps, price, pressure,
     vwap: profile?.vwap ?? null, direction, evidence,
     quality: { validBars, withVolume: Math.round(validBars * (profile?.coverage || 0)),
       coveragePct: Math.round((profile?.coverage || 0)*100), cutoff,
@@ -235,7 +241,7 @@ export function buildFlow(st: BarStore, now: number, opts: {
 }
 
 function empty(mode: FlowMode, scope: FlowScope, cutoff: number, why: string, price: number|null): FlowResponse {
-  return { ok:false, mode, scope, title: why, profile: null, levels: [], gaps: [], sweeps: [], price, vwap:null,
+  return { ok:false, mode, scope, title: why, profile: null, levels: [], gaps: [], sweeps: [], price, vwap:null, pressure:null,
     direction:"unknown", evidence:[why], quality:{validBars:0,withVolume:0,coveragePct:0,cutoff,
       disclaimer:"Sin datos suficientes. No se inventa volumen."} };
 }
