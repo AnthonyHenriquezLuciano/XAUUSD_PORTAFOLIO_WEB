@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../api";
 import { fmt, useApp } from "../store";
+import { MetricCard } from "../components/DashboardPrimitives";
 import type { DataQuality, LevelKey, TargetStudy } from "../research/engine";
 const TARGETS:LevelKey[]=["POC","VAH","VAL","VWAP"];
 const toPct=(p:number|null)=>p==null?"—":(p*100).toFixed(1)+"%";
@@ -39,11 +40,13 @@ export default function ResearchConsole(){
     </div>
     {!cloud&&<div className="premium-warn">Conecta una cuenta MT5 con histórico M1 para ejecutar las evaluaciones. La demo no contiene ticks de volumen reales del bróker y no se fabrican resultados.</div>}
     {error&&<div className="premium-warn">{error}</div>}
-    <div className="science-metrics">
-      <div><span>Velas M1</span><b>{q?.bars.toLocaleString("es-DO")??"—"}</b></div>
-      <div><span>Cobertura tick volume</span><b>{q?q.volumePct.toFixed(1)+"%":"—"}</b></div>
-      <div><span>Huecos cortos</span><b>{q?.shortGaps??"—"}</b></div>
-      <div><span>Calidad OHLC</span><b className={q?.invalidOhlc?"sell":"buy"}>{!q?"—":q.invalidOhlc===0?"Validada":"Alertas: "+q.invalidOhlc}</b></div>
+    <div className="institutional-metric-grid">
+      <MetricCard label="Velas M1" value={q?.bars.toLocaleString("es-DO")??"—"} evidence={q?"historical":"unverified"} />
+      <MetricCard label="Cobertura de ticks" value={q?q.volumePct.toFixed(1)+"%":"—"}
+        tone={q?.volumePct!=null&&q.volumePct<85?"caution":"neutral"} evidence={q?"historical":"unverified"} />
+      <MetricCard label="Huecos cortos" value={q?.shortGaps??"—"} evidence={q?"historical":"unverified"} />
+      <MetricCard label="Integridad OHLC" value={!q?"—":q.invalidOhlc===0?"Sin anomalías":"Alertas: "+q.invalidOhlc}
+        tone={!q?"neutral":q.invalidOhlc?"caution":"positive"} evidence={q?"historical":"unverified"} />
     </div>
     <section className="science-section">
       <h2>Calidad del histórico</h2>
