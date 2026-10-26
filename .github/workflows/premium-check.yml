@@ -1,38 +1,41 @@
-name: Premium UI checks
+name: XAU Release Quality Gate
 
 on:
   pull_request:
     paths:
-      - 'frontend/**'
-      - '.github/workflows/premium-check.yml'
+      - "frontend/**"
+      - ".github/workflows/premium-check.yml"
+      - "docs/EVOLUTION_MASTERPLAN.md"
   push:
     branches:
-      - feat/obsidian-premium-control-center
+      - main
+      - "feat/**"
     paths:
-      - 'frontend/**'
-      - '.github/workflows/premium-check.yml'
+      - "frontend/**"
+      - ".github/workflows/premium-check.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: xau-release-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  frontend:
+  web:
+    name: TypeScript · Vite · Sessions · Flow · Risk
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
-          cache: 'npm'
+          node-version: "22"
+          cache: npm
           cache-dependency-path: frontend/package-lock.json
-      - name: Install dependencies
+      - name: Install locked dependencies
         working-directory: frontend
         run: npm ci
-      - name: Type check and production bundle
+      - name: Validate bundle, session clocks, profiles and risk
         working-directory: frontend
-        run: npm run build
-      - name: Validate real sessions and DST
-        working-directory: frontend
-        run: npm run test:sessions
-      - name: Validate volume profiles and inefficiency without lookahead
-        working-directory: frontend
-        run: npm run test:flow
+        run: npm run test:release
