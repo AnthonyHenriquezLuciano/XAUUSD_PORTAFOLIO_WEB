@@ -9,14 +9,14 @@ import type { SmartAlerts } from "../premium/useSmartAlerts";
 type ModuleKey = "mission" | "radar" | "timeline" | "assistant" | "accounts" | "decisions" | "autopilot" | "events";
 type AccountRow = { id: string; name: string; login: number | null; server: string | null; equity: number | null; updated_at: string | null };
 const MODULES: { id: ModuleKey; title: string; desc: string }[] = [
-  { id: "mission", title: "Funding Mission Control", desc: "Objetivo y límites" },
-  { id: "radar", title: "Portfolio Risk Radar", desc: "Riesgo hasta los stops" },
-  { id: "timeline", title: "Strategy Timeline", desc: "Agenda de estrategias" },
-  { id: "assistant", title: "AI Decision Assistant", desc: "Lectura de escenarios" },
-  { id: "accounts", title: "Multi-Account Cockpit", desc: "Cuentas conectadas" },
-  { id: "decisions", title: "¿Por qué no operó el EA?", desc: "Estado y bloqueos" },
-  { id: "autopilot", title: "Autopiloto supervisado", desc: "Modo de ejecución" },
-  { id: "events", title: "Actividad y notificaciones", desc: "Alertas y registro" }
+  { id: "mission", title: "Objetivos de fondeo", desc: "Progreso, límites y protección" },
+  { id: "radar", title: "Riesgo del portafolio", desc: "Exposición de posiciones abiertas" },
+  { id: "timeline", title: "Agenda operativa", desc: "Ventanas y estados de estrategias" },
+  { id: "assistant", title: "Asistente de análisis", desc: "Evidencia y escenarios históricos" },
+  { id: "accounts", title: "Cuentas conectadas", desc: "Visión consolidada de cuentas" },
+  { id: "decisions", title: "Diagnóstico de ejecución", desc: "Condiciones, guardas y bloqueos" },
+  { id: "autopilot", title: "Control de automatización", desc: "Estado y permisos de ejecución" },
+  { id: "events", title: "Registro de actividad", desc: "Eventos y alertas importantes" }
 ];
 const TIME: Record<string, string> = { R50: "01:05", TOK: "03:30", AORB: "04:30", ALB: "09:00", LM: "09:30" };
 const read = (key: string): string | null => { try { return localStorage.getItem(key); } catch { return null; } };
@@ -230,8 +230,8 @@ export default function CommandCenter({ alerts }: { alerts: SmartAlerts }) {
     <div className={"premium-center" + (compact ? " compact" : "")}>
       <div className="premium-hero">
         <div>
-          <div className="premium-eyebrow">XAU PORTFOLIO · OBSIDIAN GOLD</div>
-          <h1>Centro de comando</h1>
+          <div className="premium-eyebrow">XAU PORTFOLIO AI / CONTROL</div>
+          <h1>Vista general</h1>
           <p>Tu operación, tu portafolio y tu protección, en un solo espacio.</p>
         </div>
         <div className="premium-actions">
