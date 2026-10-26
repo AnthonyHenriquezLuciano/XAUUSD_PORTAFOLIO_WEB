@@ -30,3 +30,6 @@ jobs:
       - name: Type check and production bundle
         working-directory: frontend
         run: npm run build
+      - name: Validate real sessions and DST
+        working-directory: frontend
+        run: npm run test:sessions
