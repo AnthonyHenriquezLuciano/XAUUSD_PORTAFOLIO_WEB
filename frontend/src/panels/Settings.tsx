@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../api";
 import { CloudSettings } from "./CloudSettings";
+import { ChartSettings } from "./ChartSettings";
 import { fmt, pct, tstr, useApp } from "../store";
 import { Card, Field, Num, Toggle } from "../ui";
 
@@ -69,6 +70,8 @@ function SimSettings() {
         </div>
         <div className="hint" style={{ marginTop: 6 }}>Comprueba las reglas vigentes en la web de FundingPips: pueden cambiar (noticias, días mínimos, consistencia).</div>
       </Card>
+
+      <ChartSettings />
 
       <AISettings />
 

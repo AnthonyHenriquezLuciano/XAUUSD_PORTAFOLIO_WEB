@@ -282,6 +282,8 @@ try {
     await page.mouse.down();
     await page.mouse.move(box.x + box.width * 0.5, y0 - 40, { steps: 6 });
     await page.mouse.up();
+    console.log("   línea encontrada en y =", Math.round(y0 - box.y));
+    await shot("drag_despues");
     await page.getByText(/(SL|TP) movido a/).waitFor({ timeout: 10000 });
     log.push({ dragged: db.account_state[0].positions[0] });
   });
@@ -300,6 +302,18 @@ try {
     await page.waitForTimeout(1500);
     await shot("08_ajustes");
   });
+  await step("temas del gráfico y capas", async () => {
+    for (const [name, file] of [["Clásico oscuro", "12_tema_clasico"], ["Oro negro", "13_tema_oro"], ["Papel (claro)", "14_tema_papel"], ["Grafito", "15_tema_grafito"]]) {
+      await page.getByRole("button", { name }).click();
+      await page.waitForTimeout(600);
+      await page.locator(".chartwrap").screenshot({ path: `${shots}/${file}.png` });
+    }
+    await page.getByRole("button", { name: /Capas/ }).click();
+    await page.waitForTimeout(300);
+    await page.locator(".chartwrap").screenshot({ path: `${shots}/16_capas.png` });
+    await page.getByRole("button", { name: /Capas/ }).click();
+    await shot("17_ajustes_grafico");
+  });
   await step("automático ON", async () => {
     await page.locator(".auto .toggle").click();
     await page.getByRole("button", { name: "Activar" }).click();
@@ -317,6 +331,15 @@ try {
     await page.getByRole("button", { name: "Ejecutar" }).click();
     await page.getByText("Factor beneficio").waitFor({ timeout: 30000 });
     await shot("10_backtest");
+  });
+  await step("operaciones en H1", async () => {
+    await page.getByRole("button", { name: "H1", exact: true }).click();
+    await page.waitForTimeout(1200);
+    await page.locator(".chartwrap").screenshot({ path: `${shots}/18_h1_operaciones.png` });
+    await page.getByRole("button", { name: "Operar" }).click();
+    await page.locator("button.bigbtn.sell").click();
+    await page.waitForTimeout(600);
+    await page.locator(".chartwrap").screenshot({ path: `${shots}/19_preview_venta.png` });
   });
   await step("vista de móvil", async () => {
     await page.setViewportSize({ width: 390, height: 844 });

@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
-import { createChart, CrosshairMode, IChartApi, IPriceLine, ISeriesApi, LineStyle, SeriesMarker, Time, UTCTimestamp } from "lightweight-charts";
+import { createChart, CrosshairMode, IChartApi, IPriceLine, ISeriesApi, LineStyle, UTCTimestamp } from "lightweight-charts";
+import { ChartOverlay } from "../chart/overlay";
+import { alpha, themeById } from "../chart/themes";
 import { api } from "../api";
 import { fmt, useApp } from "../store";
 import { useUI } from "../uiState";
@@ -18,14 +20,18 @@ export default function Chart() {
   const chartRef = useRef<IChartApi | null>(null);
   const candleRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const fcRef = useRef<ISeriesApi<"Line">[]>([]);
-  const zoneRef = useRef<ISeriesApi<"Line">[]>([]);
+  const overlayRef = useRef<ChartOverlay | null>(null);
+  const timesRef = useRef<number[]>([]);
   const linesRef = useRef<Map<string, { line: IPriceLine; def: LineDef }>>(new Map());
   const lastRef = useRef<{ time: number; open: number; high: number; low: number; close: number } | null>(null);
   const dragRef = useRef<{ id: string; def: LineDef } | null>(null);
   const [tf, setTf] = useState<string>(() => { try { return localStorage.getItem("xauai.tf") || "M5"; } catch { return "M5"; } });
   const [dragTip, setDragTip] = useState<{ y: number; text: string } | null>(null);
   const [overlays, setOverlays] = useState<any>(null);
-  const [markers, setMarkers] = useState<SeriesMarker<Time>[]>([]);
+  const [trades, setTrades] = useState<any[]>([]);
+  const [hover, setHover] = useState<{ o: number; h: number; l: number; c: number; t: number } | null>(null);
+  const [layersOpen, setLayersOpen] = useState(false);
+  const th = themeById(ui.chart.theme);
   const connected = s.status === "conectado";
   const extraRef = useRef<number[]>([]);
   const reloadRef = useRef(false);
@@ -57,8 +63,16 @@ export default function Chart() {
     });
     chartRef.current = chart;
     candleRef.current = candle;
+    const ov = new ChartOverlay();
+    candle.attachPrimitive(ov);
+    overlayRef.current = ov;
+    chart.subscribeCrosshairMove((p: any) => {
+      const d = p?.seriesData?.get(candle);
+      if (!d || d.open == null) { setHover(null); return; }
+      setHover({ o: d.open, h: d.high, l: d.low, c: d.close, t: Number(p.time) });
+    });
     const mk = (color: string, style: LineStyle, width: 1 | 2) => chart.addLineSeries({ color, lineStyle: style, lineWidth: width, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
-    fcRef.current = [mk("rgba(224,176,79,.95)", LineStyle.Dashed, 2), mk("rgba(243,205,122,.95)", LineStyle.Dotted, 2), mk("rgba(224,176,79,.95)", LineStyle.Dashed, 2)];
+    fcRef.current = [mk("rgba(224,176,79,.7)", LineStyle.Solid, 1), mk("rgba(243,205,122,.95)", LineStyle.Dashed, 2), mk("rgba(224,176,79,.7)", LineStyle.Solid, 1)];
     return () => { chart.remove(); chartRef.current = null; candleRef.current = null; linesRef.current.clear(); };
   }, []);
 
@@ -71,6 +85,7 @@ export default function Chart() {
       if (cancel || !candleRef.current) return;
       const bars = d.bars.map((b: any) => ({ ...b, time: b.time as UTCTimestamp }));
       candleRef.current.setData(bars);
+      timesRef.current = bars.map((b: any) => Number(b.time));
       lastRef.current = bars.length ? { ...bars[bars.length - 1] } : null;
       chartRef.current?.timeScale().scrollToRealTime();
     }).catch((e) => toast(e.message, "error"));
@@ -87,6 +102,7 @@ export default function Chart() {
     const last = lastRef.current;
     if (bucket > last.time) {
       lastRef.current = { time: bucket, open: t.bid, high: t.bid, low: t.bid, close: t.bid };
+      timesRef.current = [...timesRef.current, bucket];
       // al cerrar una vela se recargan las velas cerradas (con el simulador acelerado pueden cerrarse varias a la vez)
       if (!reloadRef.current) {
         reloadRef.current = true;
@@ -95,6 +111,7 @@ export default function Chart() {
           const cur = lastRef.current;
           if (cur && bars.length && bars[bars.length - 1].time < cur.time) bars.push({ ...cur, time: cur.time as UTCTimestamp });
           candleRef.current?.setData(bars);
+          timesRef.current = bars.map((b: any) => Number(b.time));
         }).catch(() => {}).finally(() => { reloadRef.current = false; });
       }
     } else if (bucket === last.time) {
@@ -112,39 +129,11 @@ export default function Chart() {
     return () => clearInterval(id);
   }, [connected, s.strategies.map((x) => x.state).join()]);
 
-  // marcadores de operaciones del diario
+  // operaciones del diario (trazos entrada → salida en la capa de dibujo)
   useEffect(() => {
-    if (!connected || !ui.layers.operaciones) { setMarkers([]); return; }
-    api("/api/trades?n=200").then((d) => {
-      const sec = TF_SEC[tf];
-      const m: SeriesMarker<Time>[] = [];
-      for (const t of d.trades) {
-        if (!t.t_open) continue;
-        m.push({ time: (t.t_open - (t.t_open % sec)) as UTCTimestamp, position: t.side > 0 ? "belowBar" : "aboveBar", color: t.side > 0 ? "#22b07d" : "#e5534b", shape: t.side > 0 ? "arrowUp" : "arrowDown", text: t.strategy === "MANUAL" ? "M" : t.strategy });
-        if (t.t_close) m.push({ time: (t.t_close - (t.t_close % sec)) as UTCTimestamp, position: "inBar", color: (t.pnl ?? 0) >= 0 ? "#9fe3c6" : "#ffb4ae", shape: "circle", text: t.R != null ? `${t.R >= 0 ? "+" : ""}${Number(t.R).toFixed(1)}R` : "" });
-      }
-      m.sort((a, b) => (a.time as number) - (b.time as number));
-      setMarkers(m);
-    }).catch(() => {});
-  }, [connected, s.tradeClosed, tf, ui.layers.operaciones, s.positions.length]);
-  useEffect(() => { candleRef.current?.setMarkers(markers); }, [markers]);
-
-  // zonas de rango
-  useEffect(() => {
-    const chart = chartRef.current;
-    if (!chart) return;
-    zoneRef.current.forEach((z) => chart.removeSeries(z));
-    zoneRef.current = [];
-    if (!ui.layers.rangos || !overlays?.zones) return;
-    const colors = ["rgba(76,141,255,.75)", "rgba(240,136,62,.75)", "rgba(180,120,255,.75)"];
-    overlays.zones.forEach((z: any, k: number) => {
-      for (const p of [z.hi, z.lo]) {
-        const ser = chart.addLineSeries({ color: colors[k % 3], lineWidth: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false, title: p === z.hi ? z.name.split(" ")[0] : "" });
-        ser.setData([{ time: z.t0 as UTCTimestamp, value: p }, { time: Math.max(z.t1, z.t0 + 60) as UTCTimestamp, value: p }]);
-        zoneRef.current.push(ser);
-      }
-    });
-  }, [overlays, ui.layers.rangos]);
+    if (!connected) { setTrades([]); return; }
+    api("/api/trades?n=300").then((d) => setTrades(d.trades || [])).catch(() => {});
+  }, [connected, s.tradeClosed, s.positions.length, s.accountInfo?.id]);
 
   // cono de predicción
   useEffect(() => {
@@ -164,37 +153,58 @@ export default function Chart() {
   const defs: LineDef[] = [];
   for (const p of s.positions) {
     const sideTxt = p.side > 0 ? "Compra" : "Venta";
-    defs.push({ id: `pe${p.ticket}`, price: p.price_open, color: "#8a93a6", title: `${sideTxt} ${p.volume} · ${fmt(p.profit)}`, width: 1 });
-    if (p.sl) defs.push({ id: `ps${p.ticket}`, price: p.sl, color: "#e5534b", title: `SL ${fmt((p.sl - p.price_open) * p.side * contract * p.volume)}`, width: 2, drag: { kind: "pos-sl", ticket: p.ticket } });
-    if (p.tp) defs.push({ id: `pt${p.ticket}`, price: p.tp, color: "#22b07d", title: `TP +${fmt((p.tp - p.price_open) * p.side * contract * p.volume)}`, width: 2, drag: { kind: "pos-tp", ticket: p.ticket } });
+    defs.push({ id: `pe${p.ticket}`, price: p.price_open, color: p.side > 0 ? th.buy : th.sell, title: `${sideTxt} ${p.volume} · ${p.profit >= 0 ? "+" : ""}${fmt(p.profit)}`, width: 1 });
+    if (p.sl) defs.push({ id: `ps${p.ticket}`, price: p.sl, color: th.sl, title: `SL ${fmt((p.sl - p.price_open) * p.side * contract * p.volume)}`, width: 2, drag: { kind: "pos-sl", ticket: p.ticket } });
+    if (p.tp) defs.push({ id: `pt${p.ticket}`, price: p.tp, color: th.tp, title: `TP +${fmt((p.tp - p.price_open) * p.side * contract * p.volume)}`, width: 2, drag: { kind: "pos-tp", ticket: p.ticket } });
   }
   for (const o of s.orders) {
-    defs.push({ id: `oe${o.ticket}`, price: o.price, color: "#4c8dff", title: `${o.kind.replace("_", " ")} ${o.volume}`, width: 2, style: LineStyle.Dashed, drag: { kind: "ord-price", ticket: o.ticket } });
-    if (o.sl) defs.push({ id: `os${o.ticket}`, price: o.sl, color: "#e5534b", title: "SL pend.", style: LineStyle.Dashed, drag: { kind: "ord-sl", ticket: o.ticket } });
-    if (o.tp) defs.push({ id: `ot${o.ticket}`, price: o.tp, color: "#22b07d", title: "TP pend.", style: LineStyle.Dashed, drag: { kind: "ord-tp", ticket: o.ticket } });
+    const okind: Record<string, string> = { buy_limit: "Compra límite", sell_limit: "Venta límite", buy_stop: "Compra stop", sell_stop: "Venta stop" };
+    defs.push({ id: `oe${o.ticket}`, price: o.price, color: o.kind.startsWith("buy") ? th.buy : th.sell, title: `${okind[o.kind] || o.kind} ${o.volume}`, width: 2, style: LineStyle.Dashed, drag: { kind: "ord-price", ticket: o.ticket } });
+    if (o.sl) defs.push({ id: `os${o.ticket}`, price: o.sl, color: th.sl, title: "SL pend.", style: LineStyle.Dashed, drag: { kind: "ord-sl", ticket: o.ticket } });
+    if (o.tp) defs.push({ id: `ot${o.ticket}`, price: o.tp, color: th.tp, title: "TP pend.", style: LineStyle.Dashed, drag: { kind: "ord-tp", ticket: o.ticket } });
   }
   const pv = ui.preview;
   if (pv) {
     const risk = Math.abs(pv.entry - pv.sl);
     const rr = risk > 0 && pv.tp ? Math.abs(pv.tp - pv.entry) / risk : 0;
-    if (pv.kind !== "market") defs.push({ id: "pv-e", price: pv.entry, color: "#f3cd7a", title: `Entrada ${pv.kind === "limit" ? "límite" : "stop"}`, width: 2, drag: { kind: "pv-entry" } });
-    defs.push({ id: "pv-s", price: pv.sl, color: "#ff6b62", title: `SL nuevo (${fmt(risk)} $/oz)`, width: 2, style: LineStyle.Dashed, drag: { kind: "pv-sl" } });
-    if (pv.tp) defs.push({ id: "pv-t", price: pv.tp, color: "#3ddc97", title: `TP nuevo (${rr.toFixed(1)} R)`, width: 2, style: LineStyle.Dashed, drag: { kind: "pv-tp" } });
-  }
-  if (ui.layers.estrategias) {
-    for (const st of s.strategies) {
-      if (!st.levels) continue;
-      if (st.levels.buy) defs.push({ id: `sb${st.name}`, price: st.levels.buy, color: "rgba(76,141,255,.8)", title: `${st.name} compra`, style: LineStyle.SparseDotted });
-      if (st.levels.sell) defs.push({ id: `ss${st.name}`, price: st.levels.sell, color: "rgba(240,136,62,.8)", title: `${st.name} venta`, style: LineStyle.SparseDotted });
-    }
-  }
-  if (ui.layers.niveles) {
-    for (const l of s.signals?.levels || []) {
-      if (l.kind === "r50" || l.kind === "pd" || l.kind === "open") defs.push({ id: `lv${l.name}`, price: l.price, color: l.kind === "r50" ? "rgba(224,176,79,.35)" : l.kind === "pd" ? "rgba(180,190,210,.4)" : "rgba(150,160,180,.3)", title: l.name, style: LineStyle.Dotted, width: 1 });
-    }
+    if (pv.kind !== "market") defs.push({ id: "pv-e", price: pv.entry, color: th.forecast, title: `Entrada ${pv.kind === "limit" ? "límite" : "stop"}`, width: 2, drag: { kind: "pv-entry" } });
+    defs.push({ id: "pv-s", price: pv.sl, color: th.sl, title: `SL (${fmt(risk)} $/oz)`, width: 2, style: LineStyle.Dashed, drag: { kind: "pv-sl" } });
+    if (pv.tp) defs.push({ id: "pv-t", price: pv.tp, color: th.tp, title: `TP (${rr.toFixed(1)} R)`, width: 2, style: LineStyle.Dashed, drag: { kind: "pv-tp" } });
   }
   extraRef.current = defs.filter((d) => d.drag).map((d) => d.price);
   const sig = JSON.stringify(defs.map((d) => [d.id, d.price.toFixed(2), d.title, d.color]));
+
+  // ------------------------------------------------------------------ tema del gráfico
+  useEffect(() => {
+    const chart = chartRef.current, c = candleRef.current;
+    if (!chart || !c) return;
+    const hollow = ui.chart.candles === "huecas";
+    chart.applyOptions({
+      layout: { background: { color: th.bg }, textColor: th.text },
+      grid: { vertLines: { color: th.grid, visible: ui.chart.grid }, horzLines: { color: th.grid, visible: ui.chart.grid } },
+      crosshair: { vertLine: { color: th.crosshair, labelBackgroundColor: th.border }, horzLine: { color: th.crosshair, labelBackgroundColor: th.border } },
+      rightPriceScale: { borderColor: th.border }, timeScale: { borderColor: th.border },
+    });
+    c.applyOptions({ upColor: hollow ? th.bg : th.up, downColor: th.down, borderUpColor: th.up, borderDownColor: th.down, wickUpColor: th.wickUp, wickDownColor: th.wickDown });
+    const [lo, md, hi] = fcRef.current;
+    lo?.applyOptions({ color: alpha(th.forecast, 0.7) }); hi?.applyOptions({ color: alpha(th.forecast, 0.7) }); md?.applyOptions({ color: th.forecast });
+  }, [th.id, ui.chart.candles, ui.chart.grid]);
+
+  // ------------------------------------------------------------------ capa de dibujo (rangos, niveles, estrategias, operaciones)
+  useEffect(() => {
+    const ov = overlayRef.current;
+    if (!ov) return;
+    const fc = ui.showForecast && s.signals?.forecast?.points?.length ? s.signals.forecast : null;
+    const last = lastRef.current?.time ?? s.tick?.time ?? 0;
+    ov.setData({
+      tf: TF_SEC[tf], times: () => timesRef.current, nowT: last, atr: s.signals?.atr, theme: th,
+      layers: { rangos: !!ui.layers.rangos, niveles: !!ui.layers.niveles, estrategias: !!ui.layers.estrategias, operaciones: !!ui.layers.operaciones, rr: ui.chart.rr },
+      zones: overlays?.zones || [], levels: s.signals?.levels || [], strategies: s.strategies || [],
+      trades: trades.filter((t) => t.status !== "abierta"), positions: s.positions,
+      preview: ui.preview ? { side: ui.preview.side, entry: ui.preview.entry, sl: ui.preview.sl, tp: ui.preview.tp } : null,
+      forecast: fc ? { points: fc.points.map((p: any, i: number) => ({ ...p, t: i === 0 ? last : last + p.h * 3600 })) } : null,
+    });
+  }, [th.id, tf, overlays, s.signals, s.strategies, trades, s.positions, ui.preview, ui.layers, ui.chart.rr, ui.showForecast, s.barsVersion, lastRef.current?.time, s.tick?.time ? Math.floor(s.tick.time / 30) : 0]);
 
   useEffect(() => {
     const c = candleRef.current;
@@ -320,12 +330,17 @@ export default function Chart() {
         <div className="seg">
           {Object.keys(TF_SEC).map((k) => <button key={k} className={tf === k ? "on" : ""} onClick={() => setTf(k)}>{k}</button>)}
         </div>
-        <div className="row small">
-          {[["niveles", "Niveles"], ["rangos", "Rangos"], ["estrategias", "Estrategias"], ["operaciones", "Operaciones"]].map(([k, l]) => (
-            <label key={k} className="row" style={{ gap: 4, cursor: "pointer" }}>
-              <input type="checkbox" checked={!!ui.layers[k]} onChange={(e) => ui.setLayer(k, e.target.checked)} />{l}
-            </label>
-          ))}
+        <div className="layers-wrap">
+          <button className={`btn sm ${layersOpen ? "primary" : ""}`} onClick={() => setLayersOpen(!layersOpen)} aria-expanded={layersOpen}>Capas ▾</button>
+          {layersOpen ? (
+            <div className="layers-menu" onMouseLeave={() => setLayersOpen(false)}>
+              {([["rangos", "Rangos de sesión", th.zone.asia], ["niveles", "Niveles clave", th.level.pd], ["estrategias", "Órdenes de las estrategias", th.buy], ["operaciones", "Operaciones (entrada → salida)", th.win]] as [string, string, string][]).map(([k, l, c]) => (
+                <label key={k} className="layer-item"><input type="checkbox" checked={!!ui.layers[k]} onChange={(e) => ui.setLayer(k, e.target.checked)} /><i style={{ background: c }} />{l}</label>
+              ))}
+              <label className="layer-item"><input type="checkbox" checked={ui.chart.rr} onChange={(e) => ui.setChart({ rr: e.target.checked })} /><i style={{ background: th.tp }} />Zonas de riesgo / beneficio</label>
+              <div className="small muted" style={{ padding: "4px 6px 2px" }}>Colores y estilo: Ajustes → Gráfico</div>
+            </div>
+          ) : null}
         </div>
         <div className="spacer" />
         <button className={`btn sm ${ui.showForecast ? "primary" : ""}`} onClick={() => ui.setShowForecast(!ui.showForecast)} disabled={!fc}>
@@ -336,11 +351,21 @@ export default function Chart() {
       <div className="chart">
         <div ref={el} style={{ position: "absolute", inset: 0 }} />
         <div className="chart-legend">
-          {s.tick ? (
-            <div className="box mono">
-              <span className="gold">{s.settings?.symbol || "XAUUSD"}</span>{"  "}
-              <span className="sell">{fmt(s.tick.bid)}</span> / <span className="buy">{fmt(s.tick.ask)}</span>
-              <span className="dim">{"  "}spread {fmt(s.tick.ask - s.tick.bid)}</span>
+          {s.tick || hover ? (
+            <div className="ohlc mono" style={{ color: th.text }}>
+              <span style={{ color: th.light ? "#1f2633" : "#e6e9ef", fontWeight: 700 }}>{s.settings?.symbol || "XAUUSD"}</span>
+              <span>· {tf}</span>
+              {hover ? (() => {
+                const ch = hover.c - hover.o, col = ch >= 0 ? th.up : th.down;
+                return <>
+                  <span>O <b style={{ color: col }}>{fmt(hover.o)}</b></span><span>H <b style={{ color: col }}>{fmt(hover.h)}</b></span>
+                  <span>L <b style={{ color: col }}>{fmt(hover.l)}</b></span><span>C <b style={{ color: col }}>{fmt(hover.c)}</b></span>
+                  <span style={{ color: col }}>{ch >= 0 ? "+" : ""}{fmt(ch)} ({((ch / hover.o) * 100).toFixed(2)} %)</span>
+                </>;
+              })() : s.tick ? <>
+                <span>Bid <b style={{ color: th.down }}>{fmt(s.tick.bid)}</b></span><span>Ask <b style={{ color: th.up }}>{fmt(s.tick.ask)}</b></span>
+                <span>Spread {fmt(s.tick.ask - s.tick.bid)}</span>
+              </> : null}
             </div>
           ) : null}
           {connected && s.broker === "cloud" && !s.ea?.online ? (

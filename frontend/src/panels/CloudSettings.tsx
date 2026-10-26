@@ -4,6 +4,7 @@ import { fmt, useApp } from "../store";
 import { useUI } from "../uiState";
 import { Card, Field, Num, Toggle } from "../ui";
 import { AISettings } from "./Settings";
+import { ChartSettings } from "./ChartSettings";
 
 function Row({ label, children, hint, pending }: { label: string; children: React.ReactNode; hint?: string; pending?: boolean }) {
   return (
@@ -72,6 +73,8 @@ export function CloudSettings() {
         </div>
         <div className="hint" style={{ marginTop: 6 }}>Comprueba las reglas vigentes en la web de FundingPips: pueden cambiar (noticias, días mínimos, consistencia).</div>
       </Card>
+
+      <ChartSettings />
 
       <AISettings />
 
