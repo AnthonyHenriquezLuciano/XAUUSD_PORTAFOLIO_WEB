@@ -2,12 +2,13 @@
 // y manda las órdenes al EA a través de la tabla "commands". Implementa las mismas rutas que usaba la app.
 import { emit, type Backend } from "../api";
 import { BarStore, dayOf, DailyBars, RawBars } from "../ai/bars";
+import { buildFlow } from "../flow/engine";
 import { computeFeatures, FeatTable } from "../ai/features";
 import { loadModels, Models, predictEntry, scenGet, labelRegime, labelVol } from "../ai/model";
 import { evaluateTrade, featAt, marketState, zonesAt } from "../ai/analytics";
 import { supabase } from "../lib/supabase";
 
-const WINDOW_DAYS = 15;
+const WINDOW_DAYS = 30;
 const TFM: Record<string, number> = { M1: 1, M5: 5, M15: 15, M30: 30, H1: 60, H4: 240, D1: 1440 };
 const r2 = (v: number) => Math.round(v * 100) / 100;
 const nowS = () => Math.floor(Date.now() / 1000);
@@ -489,6 +490,24 @@ export async function createCloud(accountId: string): Promise<Backend> {
         const m = TFM[qs.get("tf") || "M5"] || 5;
         const lim = Number(qs.get("limit") || 3000);
         return { tf: qs.get("tf"), bars: store!.tf(m).slice(-lim) };
+      }
+      case "GET /api/flow": {
+        if (!store || !store.length) fail("Sin velas M1 para análisis de volumen.");
+        const scope = qs.get("scope") || "london";
+        const mode = qs.get("mode") || "session";
+        if (!["tokyo", "london", "newyork", "day"].includes(scope) ||
+            !["session", "fixed", "recent"].includes(mode)) fail("Selección de perfil no válida.");
+        const last = store.ts[store.length - 1] + 59;
+        // El corte jamás puede superar la última vela disponible.
+        const cutoff = Math.min(last, k?.time || last, Number(qs.get("cutoff") || last));
+        return buildFlow(store, last, {
+          mode: mode as "session" | "fixed" | "recent",
+          scope: scope as "tokyo" | "london" | "newyork" | "day",
+          start: qs.has("start") ? Number(qs.get("start")) : undefined,
+          end: qs.has("end") ? Number(qs.get("end")) : undefined,
+          bins: qs.has("bins") ? Number(qs.get("bins")) : 64,
+          cutoff, brokerOffsetSec: srvOffset()
+        });
       }
       case "GET /api/overlays": return { zones: store && k ? zonesAt(store, k.time) : [], strategies: strategies(), levels: signals.levels || [] };
       case "GET /api/trades": {
