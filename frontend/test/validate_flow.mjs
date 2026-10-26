@@ -18,6 +18,9 @@ function push({o=100,h=102,l=98,c=100,v=20}={}) {
 }
 for(let i=0;i<60;i++)push();
 const st=new BarStore(raw,0,14);
+assert.equal(st.tf(5).length,12,"M1 bars aggregated to 5 minute candles");
+assert.equal(st.tf(5).reduce((sum,b)=>sum+b.volume,0),1200,
+  "aggregated histogram retains every observed tick of M1 volume");
 const full=volumeProfile(st,base,base+3600,base+3599,64);
 assert.ok(full,"profile must exist");
 assert.equal(full.bars,60);
