@@ -2,6 +2,7 @@ import React from "react";
 
 // Iconos de trazo (20×20) para la navegación y las acciones
 const P: Record<string, string> = {
+  menu: "M3 5h14M3 10h14M3 15h14",
   home: "M3 9.5L10 3l7 6.5V17H3V9.5zM8 17v-5h4v5",
   clock: "M10 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16zM10 5v5l3 2",
   "shield-check": "M10 2l7 3v5c0 4.7-2.8 7-7 9-4.2-2-7-4.3-7-9V5l7-3zM6.8 10l2.2 2.2 4.4-4.4",
