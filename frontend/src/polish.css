@@ -52,3 +52,14 @@
  @keyframes dialog-appear{from{transform:scale(.98);opacity:.65}to{transform:scale(1);opacity:1}}
 }
 @media(prefers-reduced-motion:reduce){.rail-overflow,.shortcut-dialog{animation:none!important}}
+
+.workspace-loading{display:flex;align-items:center;gap:12px;min-height:48px;padding:12px 16px;border:1px solid #3b444d;
+ background:linear-gradient(115deg,#1D252C,#151B21);color:var(--muted);border-radius:9px;font-size:12px}
+.workspace-loading-icon{display:flex;gap:4px;height:15px;align-items:center}
+.workspace-loading-icon span{display:block;width:4px;height:6px;border-radius:4px;background:var(--gold);opacity:.55}
+@media(prefers-reduced-motion:no-preference){
+ .workspace-loading-icon span{animation:load-wave 1.15s ease-in-out infinite}
+ .workspace-loading-icon span:nth-child(2){animation-delay:.15s}
+ .workspace-loading-icon span:nth-child(3){animation-delay:.3s}
+ @keyframes load-wave{0%,100%{height:5px;opacity:.4}50%{height:15px;opacity:1}}
+}
