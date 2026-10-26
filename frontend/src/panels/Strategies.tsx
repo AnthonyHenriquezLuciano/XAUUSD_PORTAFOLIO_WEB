@@ -109,7 +109,7 @@ const TEMPLATE: Record<string, Record<string, any>> = {
 function Backtest() {
   const { s, toast } = useApp();
   const cloud = s.broker === "cloud";
-  const [cfg, setCfg] = useState({ start: "", end: "", balance: 100000, funding: false });
+  const [cfg, setCfg] = useState({ start: "", end: "", balance: 100000, funding: false, management: false });
   const [custom, setCustom] = useState<Record<string, any>>({});
   const [extra, setExtra] = useState<StratDef | null>(null);
   const job = s.jobs.backtest;
@@ -126,6 +126,7 @@ function Backtest() {
         <Field label="Hasta (vacío = hoy)"><input placeholder="2026-10-15" value={cfg.end} onChange={(e) => setCfg({ ...cfg, end: e.target.value })} /></Field>
         <Field label="Balance"><input type="number" value={cfg.balance} onChange={(e) => setCfg({ ...cfg, balance: Number(e.target.value) })} /></Field>
         <label className="row small" style={{ marginTop: 18 }}><input type="checkbox" checked={cfg.funding} onChange={(e) => setCfg({ ...cfg, funding: e.target.checked })} />Aplicar reglas de fondeo</label>
+        {cloud ? <label className="row small"><input type="checkbox" checked={cfg.management} onChange={(e) => setCfg({ ...cfg, management: e.target.checked })} />Aplicar gestión automática (Ajustes)</label> : null}
       </div>
       {cloud ? (
         <details style={{ marginTop: 8 }}>

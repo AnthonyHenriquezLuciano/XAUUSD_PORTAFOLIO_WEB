@@ -203,8 +203,11 @@ export default function Chart() {
       trades: trades.filter((t) => t.status !== "abierta"), positions: s.positions,
       preview: ui.preview ? { side: ui.preview.side, entry: ui.preview.entry, sl: ui.preview.sl, tp: ui.preview.tp } : null,
       forecast: fc ? { points: fc.points.map((p: any, i: number) => ({ ...p, t: i === 0 ? last : last + p.h * 3600 })) } : null,
+      news: ui.layers.noticias === false ? [] : (s.news || []).filter((n: any) => n.country === "USD" && (n.impact === "High" || (n.impact === "Medium" && s.settings?.extra?.news_impact === "medium")))
+        .map((n: any) => ({ t: n.ts + (s.news_offset ?? 7200), title: n.title, impact: n.impact })),
+      newsWindow: s.settings?.extra?.news_enabled ? { before: Number(s.settings.extra.news_before || 0), after: Number(s.settings.extra.news_after || 0) } : null,
     });
-  }, [th.id, tf, overlays, s.signals, s.strategies, trades, s.positions, ui.preview, ui.layers, ui.chart.rr, ui.showForecast, s.barsVersion, lastRef.current?.time, s.tick?.time ? Math.floor(s.tick.time / 30) : 0]);
+  }, [th.id, tf, overlays, s.signals, s.strategies, trades, s.positions, ui.preview, ui.layers, ui.chart.rr, ui.showForecast, s.barsVersion, s.news, s.settings?.extra, lastRef.current?.time, s.tick?.time ? Math.floor(s.tick.time / 30) : 0]);
 
   useEffect(() => {
     const c = candleRef.current;
@@ -334,8 +337,8 @@ export default function Chart() {
           <button className={`btn sm ${layersOpen ? "primary" : ""}`} onClick={() => setLayersOpen(!layersOpen)} aria-expanded={layersOpen}>Capas ▾</button>
           {layersOpen ? (
             <div className="layers-menu" onMouseLeave={() => setLayersOpen(false)}>
-              {([["rangos", "Rangos de sesión", th.zone.asia], ["niveles", "Niveles clave", th.level.pd], ["estrategias", "Órdenes de las estrategias", th.buy], ["operaciones", "Operaciones (entrada → salida)", th.win]] as [string, string, string][]).map(([k, l, c]) => (
-                <label key={k} className="layer-item"><input type="checkbox" checked={!!ui.layers[k]} onChange={(e) => ui.setLayer(k, e.target.checked)} /><i style={{ background: c }} />{l}</label>
+              {([["rangos", "Rangos de sesión", th.zone.asia], ["niveles", "Niveles clave", th.level.pd], ["estrategias", "Órdenes de las estrategias", th.buy], ["operaciones", "Operaciones (entrada → salida)", th.win], ["noticias", "Noticias USD", th.sl]] as [string, string, string][]).map(([k, l, c]) => (
+                <label key={k} className="layer-item"><input type="checkbox" checked={ui.layers[k] !== false} onChange={(e) => ui.setLayer(k, e.target.checked)} /><i style={{ background: c }} />{l}</label>
               ))}
               <label className="layer-item"><input type="checkbox" checked={ui.chart.rr} onChange={(e) => ui.setChart({ rr: e.target.checked })} /><i style={{ background: th.tp }} />Zonas de riesgo / beneficio</label>
               <div className="small muted" style={{ padding: "4px 6px 2px" }}>Colores y estilo: Ajustes → Gráfico</div>

@@ -76,7 +76,15 @@ export type BTConfig = {
   use_time_exit: boolean; no_time_exit_tp_r: number; dd_throttle: boolean; throttle_min: number; max_spread: number; min_lot_tol: number;
   contract: number; cost_per_lot: number; lot_step: number; lot_min: number; daily_guard_pct: number; max_guard_pct: number; max_loss_pct: number; target_pct: number;
   start?: number; end?: number;
+  /** Gestión automática (como el EA v6.10): break-even, trailing y cierre parcial, en múltiplos del SL inicial (R). */
+  mg?: MgCfg | null;
 };
+export type MgCfg = { be: boolean; be_r: number; be_off: number; tr: boolean; tr_start: number; tr_dist: number; pt: boolean; pt_r: number; pt_pct: number };
+export function mgFromExtra(x: any): MgCfg | null {
+  if (!x || x.mg_scope === "manuales" || !(x.be_enabled || x.tr_enabled || x.pt_enabled)) return null;
+  return { be: !!x.be_enabled, be_r: Number(x.be_r ?? 1), be_off: Number(x.be_offset ?? 0.1), tr: !!x.tr_enabled, tr_start: Number(x.tr_start_r ?? 1.5), tr_dist: Number(x.tr_dist_r ?? 1),
+    pt: !!x.pt_enabled, pt_r: Number(x.pt_r ?? 1), pt_pct: Number(x.pt_pct ?? 50) };
+}
 export const DEFAULT_CFG: BTConfig = {
   balance: 100000, funding: false, risk_pct: 0.3, compound: true, compound_up_pct: 2, compound_dn_pct: 1, max_open_trades: 4, use_time_exit: true, no_time_exit_tp_r: 3,
   dd_throttle: true, throttle_min: 0.3, max_spread: 0.8, min_lot_tol: 2, contract: 100, cost_per_lot: 10, lot_step: 0.01, lot_min: 0.01,
@@ -123,7 +131,7 @@ export function runBacktest(st: BarStore, defs: StratDef[], cfg: BTConfig) {
   };
 
   let balance = cfg.balance;
-  type Pos = { strategy: string; side: number; lots: number; entry: number; sl: number; tp: number; t_open: number; i_open: number; exit_at: number | null; day: number; sl_dist: number; risk_money: number; from_stop: boolean; mfe: number; mae: number };
+  type Pos = { strategy: string; side: number; lots: number; entry: number; sl: number; tp: number; t_open: number; i_open: number; exit_at: number | null; day: number; sl_dist: number; risk_money: number; from_stop: boolean; mfe: number; mae: number; part: boolean };
   let positions: Pos[] = [];
   let pending: { strategy: string; order: Order }[] = [];
   const trades: any[] = [], skipped: any[] = [], daily: { day: number; balance: number; equity: number }[] = [];
@@ -132,12 +140,29 @@ export function runBacktest(st: BarStore, defs: StratDef[], cfg: BTConfig) {
 
   const equityAt = (b: number, a: number) => { let e = balance; for (const p of positions) e += ((p.side > 0 ? b : a) - p.entry) * p.side * contract * p.lots; return e; };
   const worstEq = () => { let e = balance; for (const p of positions) e += (p.sl - p.entry) * p.side * contract * p.lots; return e; };
-  const close = (p: Pos, i: number, xp: number, reason: string) => {
-    const pnl = (xp - p.entry) * p.side * contract * p.lots - cpl * p.lots;
+  const close = (p: Pos, i: number, xp: number, reason: string, lots = p.lots) => {
+    if (reason === "SL" && Math.abs(p.sl - (p.entry - p.side * p.sl_dist)) > 1e-6) reason = (p.sl - p.entry) * p.side >= 0 ? "SL a favor" : "SL movido";
+    const pnl = (xp - p.entry) * p.side * contract * lots - cpl * lots;
     balance += pnl;
-    trades.push({ strategy: p.strategy, side: p.side, t_open: p.t_open, t_close: ts[i], entry: p.entry, exit: xp, sl: p.sl, tp: p.tp, lots: p.lots, pnl,
+    trades.push({ strategy: p.strategy, side: p.side, t_open: p.t_open, t_close: ts[i], entry: p.entry, exit: xp, sl: p.sl, tp: p.tp, lots, pnl,
       R: ((xp - p.entry) * p.side - cpl / contract) / p.sl_dist, reason, mfe_R: p.mfe / p.sl_dist, mae_R: p.mae / p.sl_dist, balance });
-    positions = positions.filter((x) => x !== p);
+    if (lots < p.lots - 1e-9) p.lots = Math.round((p.lots - lots) * 1e8) / 1e8;
+    else positions = positions.filter((x) => x !== p);
+  };
+  // Gestión al cierre de la vela: el SL nuevo se aplica desde la vela siguiente (el SL/TP de esta vela ya se comprobó antes).
+  const mg = cfg.mg;
+  const manage = (p: Pos, i: number) => {
+    if (!mg || !positions.includes(p)) return;
+    const R = p.sl_dist, best = p.side > 0 ? h[i] : l[i] + sp[i], favR = (best - p.entry) * p.side / R;
+    if (mg.pt && !p.part && favR >= mg.pt_r) {
+      p.part = true;
+      const q = normLots(p.lots * mg.pt_pct / 100);
+      if (q > 0 && p.lots - q >= cfg.lot_min - 1e-9) close(p, i, p.entry + p.side * mg.pt_r * R, "PARCIAL", q);
+    }
+    let sl = p.sl;
+    if (mg.be && favR >= mg.be_r) sl = p.side > 0 ? Math.max(sl, p.entry + mg.be_off) : Math.min(sl, p.entry - mg.be_off);
+    if (mg.tr && favR >= mg.tr_start) sl = p.side > 0 ? Math.max(sl, best - mg.tr_dist * R) : Math.min(sl, best + mg.tr_dist * R);
+    if (Math.abs(sl - p.sl) >= Math.max(0.1, 0.02 * R)) p.sl = sl;
   };
   const tryOpen = (name: string, od: Order, side: number, px: number, i: number, fromStop: boolean) => {
     if (traded.has(name)) return false;
@@ -152,7 +177,7 @@ export function runBacktest(st: BarStore, defs: StratDef[], cfg: BTConfig) {
     const [lots, riskMoney, why] = size(slD, equityAt(bid, ask), worstEq(), balance);
     if (lots <= 0) { skipped.push([ts[i], name, why]); return false; }
     positions.push({ strategy: name, side, lots, entry: px, sl: px - side * slD, tp: tpR > 0 ? px + side * tpR * slD : 0, t_open: ts[i], i_open: i,
-      exit_at: cfg.use_time_exit ? (od.exit_at ?? null) : null, day: curDay!, sl_dist: slD, risk_money: riskMoney, from_stop: fromStop, mfe: 0, mae: 0 });
+      exit_at: cfg.use_time_exit ? (od.exit_at ?? null) : null, day: curDay!, sl_dist: slD, risk_money: riskMoney, from_stop: fromStop, mfe: 0, mae: 0, part: false });
     return true;
   };
 
@@ -227,6 +252,7 @@ export function runBacktest(st: BarStore, defs: StratDef[], cfg: BTConfig) {
         if (ah >= p.sl) close(p, i, ao > p.sl ? Math.max(p.sl, ao) : p.sl, "SL");
         else if (p.tp > 0 && al <= p.tp) close(p, i, ao < p.tp ? Math.min(p.tp, ao) : p.tp, "TP");
       }
+      manage(p, i);
     }
     if (positions.length || cfg.funding) {
       why = checkGuards(equityAt(c[i], c[i] + sp[i]));
@@ -308,9 +334,11 @@ export async function runBacktestJob(accountId: string, shift: number, body: any
       daily_guard_pct: s.funding?.daily_guard_pct ?? 2.5, max_guard_pct: s.funding?.max_guard_pct ?? 9, max_loss_pct: s.funding?.max_loss_pct ?? 10, target_pct: body.funding ? (s.funding?.target_pct ?? 0) : 0 };
     const defs = (body.strategies as StratDef[] | undefined) || DEFAULT_STRATS.filter((d) => s.strategies?.[d.name]?.enabled !== false);
     await new Promise((r) => setTimeout(r, 30));
+    if (body.management) cfg.mg = mgFromExtra(s.extra);
+    if (body.management && !cfg.mg) throw new Error("La gestión automática está desactivada en Ajustes (o solo para manuales): activa break-even, trailing o cierre parcial.");
     const res = runBacktest(st, defs, cfg);
     const result = { summary: summarize(res), equity: res.daily.map((d) => [d.day, Math.round(d.equity * 100) / 100]), trades: res.trades.slice(-300), skipped: res.skipped.slice(-200),
-      note: `Periodo ${new Date(start * 1000).toISOString().slice(0, 10)} – ${new Date(Math.min(end, raw.ts[raw.ts.length - 1]) * 1000).toISOString().slice(0, 10)} con ${raw.ts.length.toLocaleString("es-ES")} velas M1 de tu bróker.` };
+      note: `${cfg.mg ? "Con gestión automática. " : ""}Periodo ${new Date(start * 1000).toISOString().slice(0, 10)} – ${new Date(Math.min(end, raw.ts[raw.ts.length - 1]) * 1000).toISOString().slice(0, 10)} con ${raw.ts.length.toLocaleString("es-ES")} velas M1 de tu bróker.` };
     setJob(name, { status: "listo", result });
     return result;
   } catch (e: any) {

@@ -16,3 +16,21 @@ for (const fund of [false, true]) {
   console.log(`funding=${fund}: JS ${res.trades.length} ops, final ${res.final.toFixed(2)} | Python ${py.trades.length} ops, final ${py.final.toFixed(2)} | idénticas ${same} | ${Date.now() - t0} ms | ret ${sm.ret_pct}% dd ${sm.max_dd_pct}%`);
   if (diff.length) console.log(JSON.stringify(diff.slice(0, 2)));
 }
+
+// Gestión automática: sin activar no cambia nada; con ella, comparación orientativa.
+const base = runBacktest(st, DEFAULT_STRATS, { ...DEFAULT_CFG, funding: false, mg: null });
+const variants: [string, any][] = [
+  ["BE 1R", { be: true, be_r: 1, be_off: 0.1, tr: false, tr_start: 1.5, tr_dist: 1, pt: false, pt_r: 1, pt_pct: 50 }],
+  ["Trailing 1.5R/1R", { be: false, be_r: 1, be_off: 0.1, tr: true, tr_start: 1.5, tr_dist: 1, pt: false, pt_r: 1, pt_pct: 50 }],
+  ["Parcial 50% a 1R", { be: false, be_r: 1, be_off: 0.1, tr: false, tr_start: 1.5, tr_dist: 1, pt: true, pt_r: 1, pt_pct: 50 }],
+];
+const sb = summarize(base);
+console.log(`gestión: sin gestión ret ${sb.ret_pct}% dd ${sb.max_dd_pct}% ops ${base.trades.length}`);
+for (const [name, mg] of variants) {
+  const r = runBacktest(st, DEFAULT_STRATS, { ...DEFAULT_CFG, funding: false, mg });
+  const sm = summarize(r);
+  const reasons: Record<string, number> = {};
+  for (const t of r.trades) reasons[t.reason] = (reasons[t.reason] || 0) + 1;
+  console.log(`gestión: ${name} ret ${sm.ret_pct}% dd ${sm.max_dd_pct}% ops ${r.trades.length} ${JSON.stringify(reasons)}`);
+  for (const t of r.trades) if (t.lots <= 0 || !Number.isFinite(t.pnl)) throw new Error("operación inválida");
+}

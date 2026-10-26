@@ -18,6 +18,8 @@ export type OverlayData = {
   positions: { side: number; price_open: number; sl: number; tp: number; time: number }[];
   preview: { side: number; entry: number; sl: number; tp: number } | null;
   forecast: { points: { t: number; p10: number; p50: number; p90: number }[] } | null;
+  news: { t: number; title: string; impact: string }[];
+  newsWindow: { before: number; after: number } | null;
 };
 
 const FONT = "600 10.5px Inter, system-ui, -apple-system, Segoe UI, sans-serif";
@@ -124,6 +126,14 @@ export class ChartOverlay implements ISeriesPrimitive<Time> {
       if (ye != null && ys != null) {
         ctx.fillStyle = alpha(th.sl, 0.16); ctx.fillRect(x0, Math.min(ye, ys), x1 - x0, Math.abs(ys - ye));
         if (yt != null) { ctx.fillStyle = alpha(th.tp, 0.16); ctx.fillRect(x0, Math.min(ye, yt), x1 - x0, Math.abs(yt - ye)); }
+      }
+    }
+    if (d.newsWindow) {
+      for (const n of d.news) {
+        const xa = this.x(n.t - d.newsWindow.before * 60), xb = this.x(n.t + d.newsWindow.after * 60);
+        if (xa == null || xb == null || xb < 0 || xa > W) continue;
+        ctx.fillStyle = alpha(th.sl, th.light ? 0.07 : 0.1);
+        ctx.fillRect(xa, 0, Math.max(2, xb - xa), _H);
       }
     }
     const fc = d.forecast?.points;
@@ -235,6 +245,20 @@ export class ChartOverlay implements ISeriesPrimitive<Time> {
         pill(ctx, xm, (ye + ys) / 2, `Riesgo ${fmt(risk)}`, alpha(th.sl, 0.9), "#ffffff", "center");
         if (yt != null) pill(ctx, xm, (ye + yt) / 2, `Beneficio ${fmt(rew)} · 1 : ${(rew / risk).toFixed(2)}`, alpha(th.tp, 0.9), "#ffffff", "center");
       }
+    }
+
+    // noticias: línea vertical con etiqueta arriba
+    let lastX = -Infinity, row = 0;
+    for (const n of [...d.news].sort((a, b) => a.t - b.t)) {
+      const x = this.x(n.t);
+      if (x == null || x < -5 || x > W + 5) continue;
+      const c = n.impact === "High" ? th.sl : th.forecast;
+      ctx.strokeStyle = alpha(c, 0.75); ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+      ctx.beginPath(); ctx.moveTo(Math.round(x) + 0.5, 0); ctx.lineTo(Math.round(x) + 0.5, H); ctx.stroke(); ctx.setLineDash([]);
+      row = x - lastX < 130 ? row + 1 : 0;
+      lastX = x;
+      const label = n.title.length > 22 ? n.title.slice(0, 21) + "…" : n.title;
+      pill(ctx, x + 3, 30 + row * 18, `⚑ ${label}`, alpha(c, 0.9), "#ffffff", "left");
     }
 
     // etiquetas de niveles sin solaparse

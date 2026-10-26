@@ -6,18 +6,19 @@ import Journal from "./panels/Journal";
 import Positions from "./panels/Positions";
 import Settings from "./panels/Settings";
 import Signals from "./panels/Signals";
+import Stats from "./panels/Stats";
 import Strategies from "./panels/Strategies";
 import Trade from "./panels/Trade";
 import { tstr, useApp } from "./store";
 import { useUI } from "./uiState";
 
-const TABS: [string, string][] = [["operar", "Operar"], ["senales", "Señales"], ["posiciones", "Posiciones"], ["diario", "Diario"], ["estrategias", "Estrategias"], ["ajustes", "Ajustes"]];
+const TABS: [string, string][] = [["operar", "Operar"], ["senales", "Señales"], ["posiciones", "Posiciones"], ["diario", "Diario"], ["stats", "Estadísticas"], ["estrategias", "Estrategias"], ["ajustes", "Ajustes"]];
 
 export default function App({ signedIn, onExitSim }: { signedIn: boolean; onExitSim?: () => void }) {
   const { s, toasts } = useApp();
   const ui = useUI();
   const [logOpen, setLogOpen] = useState(false);
-  const panel = { operar: <Trade />, senales: <Signals />, posiciones: <Positions />, diario: <Journal />, estrategias: <Strategies />, ajustes: <Settings /> }[ui.tab];
+  const panel = { operar: <Trade />, senales: <Signals />, posiciones: <Positions />, diario: <Journal />, stats: <Stats />, estrategias: <Strategies />, ajustes: <Settings /> }[ui.tab];
   return (
     <div className="app">
       <Header onExitSim={onExitSim} />

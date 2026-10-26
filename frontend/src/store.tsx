@@ -37,6 +37,8 @@ export type AppState = {
   me?: string;
   accountInfo?: any;
   barsVersion: number;
+  news?: any[];
+  news_offset?: number;
 };
 
 const initial: AppState = {

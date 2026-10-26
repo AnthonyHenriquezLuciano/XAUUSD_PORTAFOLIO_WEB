@@ -69,6 +69,7 @@ export default function Header({ onExitSim }: { onExitSim?: () => void }) {
             </>
           ) : null}
           {r.blocked ? <span className="chip down">Bloqueado: {r.blocked}</span> : null}
+          {s.market?.news ? <span className="chip down" title="Filtro de noticias: el EA no abre operaciones">Pausa por noticia · {s.market.news.title} · hasta {new Date(s.market.news.until * 1000).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}</span> : null}
         </>
       ) : null}
       <div className="spacer" />

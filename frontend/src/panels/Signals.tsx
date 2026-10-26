@@ -3,6 +3,7 @@ import { api } from "../api";
 import { fmt, pct, tstr, useApp } from "../store";
 import { useUI } from "../uiState";
 import { Card } from "../ui";
+import NewsCard from "./NewsCard";
 
 const REG: Record<string, [string, string]> = { alcista: ["Tendencia alcista", "up"], bajista: ["Tendencia bajista", "down"], rango: ["Rango", "gold"], transicion: ["Transición", ""] };
 const VOL: Record<string, string> = { baja: "Volatilidad baja", normal: "Volatilidad normal", alta: "Volatilidad alta", extrema: "Volatilidad extrema" };
@@ -32,6 +33,8 @@ export default function Signals() {
           <div><div className="muted">Vol. última hora</div>{fmt(g.rv60, 3)}</div>
         </div>
       </Card>
+
+      <NewsCard />
 
       <Card title="Qué te conviene hacer">
         <ul style={{ margin: 0, paddingLeft: 18 }} className="col">

@@ -10,7 +10,10 @@ Web para operar oro (XAUUSD) en MetaTrader 5 desde el navegador (PC o móvil), c
   - historial de cada estrategia en el escenario actual.
 - **Señales**: régimen, volatilidad, sesión, niveles clave y qué conviene hacer.
 - **Diario evaluado**: cada operación cerrada recibe una nota (0–100) y un veredicto: «buena entrada» o «debiste esperar».
-- **Backtest** del portafolio con las velas reales de tu bróker. Permite probar otros parámetros o una estrategia nueva.
+- **Filtro de noticias**: calendario económico (USD) que el servidor descarga cada hora. El EA no abre operaciones dentro de la ventana de cada noticia de alto impacto (o también medio) y, si quieres, cierra antes las posiciones recientes. Las noticias se ven en Señales y como líneas en el gráfico.
+- **Gestión automática de posiciones**: break-even, trailing stop y cierre parcial, en múltiplos del SL inicial (R). Se configura en Ajustes y lo ejecuta el EA, aunque la web esté cerrada. No toca operaciones de otros EA.
+- **Estadísticas y reglas de fondeo**: calendario de resultados por día, curva, acierto, factor de beneficio, R medio, rachas y desgloses por estrategia, hora, día y lado. Además, el progreso del objetivo, el DD diario y máximo, los días operados y la regla de consistencia.
+- **Backtest** del portafolio con las velas reales de tu bróker. Permite probar otros parámetros, una estrategia nueva o el efecto de la gestión automática.
 - **Cuentas compartidas**: invitas a quien quieras por correo, con acceso de «solo ver» o «puede operar».
 
 ## Cómo funciona
@@ -31,6 +34,7 @@ Las piezas:
 - **Supabase**, proyecto `neqfafcelxgcxroicmer`:
   - Postgres con reglas RLS: cada persona ve solo sus cuentas y las compartidas con ella.
   - Tiempo real para precio, estado, órdenes y diario.
+  - Función `news-sync` (cada hora, con pg_cron): descarga el calendario económico de la semana y la siguiente a la tabla `news`. El EA recibe las noticias USD solo cuando cambian.
 - **Web** (`frontend/`): React + TradingView Lightweight Charts. La IA (árboles exportados del modelo entrenado, tablas del cono y estadísticas por escenario) va en `public/ai/models.json`.
 
 ## Puesta en marcha
@@ -70,6 +74,8 @@ En [supabase.com](https://supabase.com) → tu proyecto (ref. `neqfafcelxgcxroic
 3. En segundos la cuenta aparece como «EA conectado». El EA sube hasta 180 días de velas M1, lo que tarda unos minutos.
 4. Cuando lo hayas revisado, activa **Automático ON** en la barra superior.
 
+> **Actualizar el EA:** cuando haya una versión nueva (ahora la 6.10), sustituye el `.mq5` en `MQL5/Experts`, compílalo (F7) y vuelve a ponerlo en el gráfico con las mismas entradas. Los ajustes de la web se conservan.
+
 > **Importante:** no pongas el EA v5 y el v6 a la vez en la misma cuenta. Usan los mismos magic numbers. El v6 sustituye al v5.
 
 ### 4. Compartir
@@ -103,14 +109,18 @@ Lo que se ha comprobado:
   - Probabilidades: diferencia < 0,000001.
   - La ventana de 15 días más la tabla diaria da las mismas variables que el histórico completo.
 - **Backtest en el navegador**: coincide **operación a operación** con el de Python. Sobre 5 meses de M1 da 359/359 operaciones idénticas sin reglas de fondeo y 151/151 con ellas.
-- **Web completa**: se probó con Playwright contra un Supabase simulado (REST, auth y tiempo real) y un EA simulado, en escritorio y móvil, con la CSP de producción. Pasaron los 14 pasos, sin errores de consola:
+- **Gestión automática en el backtest** (mismos 5 meses, sin reglas de fondeo): sin gestión +30,4 %; break-even a 1R +25,7 %; trailing 1,5R/1R +18,3 %; cierre parcial del 50 % a 1R +19,2 % (con menos DD: 3,4 % frente a 3,9 %). En este periodo la gestión **empeora** el resultado del portafolio: pruébalo con tus datos antes de activarla. El backtest es conservador: en cada vela comprueba primero el SL y el SL nuevo se aplica desde la vela siguiente.
+- **Web completa**: se probó con Playwright contra un Supabase simulado (REST, auth y tiempo real) y un EA simulado, en escritorio y móvil, con la CSP de producción. Pasaron los 20 pasos, sin errores de consola:
   - entrar, abrir la cuenta, señales y predicción;
   - preparar la orden con probabilidades, enviarla, BE y arrastrar el TP;
-  - diario evaluado, ajustes, Automático ON y backtest.
+  - diario evaluado, ajustes, temas del gráfico, Automático ON;
+  - calendario de noticias, filtro de noticias y gestión automática guardados para el EA;
+  - estadísticas y reglas de fondeo, backtest con y sin gestión.
+- **Calendario de noticias**: la función `news-sync` se ejecutó en el proyecto real y guardó 96 eventos.
 
 Lo que no se ha podido probar:
 
-- **El EA no se ha compilado**: aquí no hay MetaEditor. Se revisó a mano, con comprobación automática de llaves, variables declaradas y funciones duplicadas. Si MetaEditor da un error, pásame el texto exacto.
+- **El EA (v6.10) no se ha compilado**: aquí no hay MetaEditor. Se revisó a mano, con comprobación automática de llaves, variables declaradas y funciones duplicadas. Si MetaEditor da un error, pásame el texto exacto.
 - **No se ha probado contra un MT5 real**. Empieza en una **cuenta demo**, mira la pestaña Expertos de MT5 y el registro de la web.
 
 ## Qué esperar de la IA (medido fuera de muestra)
@@ -121,7 +131,7 @@ Lo que no se ha podido probar:
 - **Cono de predicción**: el rango del 80 % contuvo el precio ~79 % de las veces. La dirección acierta ~50 %.
 - **Historial por escenario**: es el resultado real del backtest 2024-2026, suavizado cuando hay pocos casos.
 
-Esto no es asesoramiento financiero. Revisa las reglas vigentes de FundingPips (noticias, días mínimos, consistencia).
+Esto no es asesoramiento financiero. Revisa las reglas vigentes de FundingPips (noticias, días mínimos, consistencia): cambian a menudo y dependen del tipo de cuenta.
 
 ## Plan gratuito de Supabase
 
@@ -141,6 +151,7 @@ frontend/                    la web (React + Vite)
   public/ea/                 EA para descargar desde la web
   test/                      pruebas (validación de la IA, backtest y extremo a extremo)
 supabase/migrations/         esquema, reglas RLS y funciones (ya aplicadas en el proyecto)
+supabase/functions/news-sync/  descarga del calendario económico (cada hora)
 supabase/functions/chat/     función del chat (ya no se usa: la web no necesita ninguna API key)
 mt5/XAU_Portfolio_Bridge_v6.mq5   EA puente
 tools/export_models.py       exporta la IA entrenada a JSON

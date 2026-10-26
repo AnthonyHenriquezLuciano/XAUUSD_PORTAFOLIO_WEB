@@ -30,13 +30,19 @@ const db = {
     strategies: [{ name: "R50", enabled: true, state: "hecha hoy", levels: null }, { name: "TOK", enabled: true, state: "sin señal hoy", levels: null }, { name: "AORB", enabled: true, state: "orden pendiente", levels: { buy: price + 12, sell: price - 9 } }, { name: "ALB", enabled: true, state: "pendiente", levels: null }, { name: "LM", enabled: false, state: "desactivada", levels: null }],
     risk: { init_bal: 100000, day_ref: 100000, risk_base: 100000, daily_floor: 97500, max_floor: 91000, daily_limit: 97000, max_limit: 90000, target: 108000, blocked: null, autotrade: false },
     market: { open: true },
-    ea: { version: "6.00", symbol: "XAUUSD", magic: 2610200, digits: 2, contract: 100, vol_min: 0.01, vol_step: 0.01, server_shift_min: 0, atr: 60,
-      settings: { autotrade: false, risk_pct: 0.3, max_open_trades: 4, use_time_exit: true, compound: true, daily_guard_pct: 2.5, max_guard_pct: 9, target_pct: 8, initial_balance: 100000, max_loss_pct: 10, strategies: { LM: false, AORB: true, TOK: true, R50: true, ALB: true } } } }],
+    ea: { version: "6.10", symbol: "XAUUSD", magic: 2610200, digits: 2, contract: 100, vol_min: 0.01, vol_step: 0.01, server_shift_min: 0, atr: 60,
+      settings: { autotrade: false, risk_pct: 0.3, max_open_trades: 4, use_time_exit: true, compound: true, daily_guard_pct: 2.5, max_guard_pct: 9, target_pct: 8, initial_balance: 100000, max_loss_pct: 10,
+        news_enabled: false, news_before: 5, news_after: 5, news_impact: "high", news_close: false, news_close_min: 10, mg_scope: "todas", be_enabled: false, be_r: 1, be_offset: 0.1, tr_enabled: false, tr_start_r: 1.5, tr_dist_r: 1, pt_enabled: false, pt_r: 1, pt_pct: 50, strategies: { LM: false, AORB: true, TOK: true, R50: true, ALB: true } } } }],
   live: [{ account_id: ACC, bid: price, ask: price + 0.15, t: lastTs + 60, equity: 100000, balance: 100000, margin: 0, free_margin: 100000, profit: {}, open: true, updated_at: nowIso() }],
   settings: [{ account_id: ACC, data: {}, updated_at: nowIso() }],
   events: [{ id: 1, account_id: ACC, t: nowIso(), level: "info", msg: "XAU Portfolio Bridge v6 iniciado" }],
   trades: [{ id: 1, account_id: ACC, ticket: 4990, source: "manual", strategy: "MANUAL", magic: 2610200, side: -1, lots: 0.5, entry: B.o[N - 2000], sl0: B.o[N - 2000] + 6, tp0: B.o[N - 2000] - 12, sl: null, tp: null, t_open: B.ts[N - 2000], exit: B.c[N - 1900], t_close: B.ts[N - 1900], pnl: 100, r: 0.3, reason: "MANUAL", status: "cerrada", prediction: null, evaluation: null, note: "", updated_at: nowIso() }],
   commands: [], notes: [], chat_messages: [],
+  news: [
+    { id: 1, ts: Math.floor(Date.now() / 1000) + 3 * 3600, country: "USD", title: "Non-Farm Employment Change", impact: "High", forecast: "150K", previous: "142K" },
+    { id: 2, ts: Math.floor(Date.now() / 1000) + 26 * 3600, country: "USD", title: "CPI m/m", impact: "High", forecast: "0.3%", previous: "0.2%" },
+    { id: 3, ts: Math.floor(Date.now() / 1000) + 5 * 3600, country: "EUR", title: "German ifo Business Climate", impact: "Medium", forecast: "", previous: "" },
+  ],
 };
 let ids = 100;
 const log = [];
@@ -49,6 +55,8 @@ function match(row, params) {
     const cell = row[k];
     if (op === "eq" && String(cell) !== val) return false;
     if (op === "gt" && !(Number(cell) > Number(val))) return false;
+    if (op === "gte" && !(Number(cell) >= Number(val))) return false;
+    if (op === "lte" && !(Number(cell) <= Number(val))) return false;
   }
   return true;
 }
@@ -324,6 +332,44 @@ try {
     await page.getByRole("button", { name: "Ajustes" }).click();
     if (await page.getByText(/API key/).count()) throw new Error("sigue el campo de API key");
     await page.getByText("Modelos de la app").waitFor();
+  });
+  await step("calendario de noticias", async () => {
+    await page.getByRole("button", { name: "Señales" }).click();
+    await page.getByText("Non-Farm Employment Change", { exact: true }).waitFor({ timeout: 10000 });
+    if (await page.getByText("German ifo Business Climate").count()) throw new Error("con filtro USD no debería salir EUR");
+    await shot("20_noticias");
+  });
+  await step("filtro de noticias y gestión automática", async () => {
+    await page.getByRole("button", { name: "Ajustes" }).click();
+    const news = page.locator(".card", { has: page.getByText("Filtro de noticias", { exact: true }) });
+    await news.locator(".toggle").first().click();
+    await news.getByRole("button", { name: "Guardar" }).click();
+    const mg = page.locator(".card", { has: page.getByText("Gestión automática de posiciones", { exact: true }) });
+    await mg.locator(".mg-block").first().locator(".toggle").click();
+    await mg.getByRole("button", { name: "Guardar" }).click();
+    await page.waitForTimeout(1500);
+    const d = db.settings[0].data;
+    if (d.news_enabled !== true || d.be_enabled !== true) throw new Error("ajustes no guardados: " + JSON.stringify(d));
+    await mg.scrollIntoViewIfNeeded();
+    await shot("21_gestion");
+  });
+  await step("estadísticas y reglas de fondeo", async () => {
+    await page.getByRole("button", { name: "Estadísticas" }).click();
+    await page.getByText("Reglas de fondeo").waitFor();
+    await page.getByText("Días operados (mínimo 3)").waitFor();
+    await page.getByText("Factor beneficio").waitFor();
+    await page.locator(".cal").waitFor();
+    await page.locator(".panel").evaluate((el) => el.scrollTo(0, 0));
+    await shot("22_estadisticas");
+    await page.locator(".cal").scrollIntoViewIfNeeded();
+    await shot("23_calendario");
+  });
+  await step("backtest con gestión automática", async () => {
+    await page.getByRole("button", { name: "Estrategias" }).click();
+    await page.getByText("Aplicar gestión automática (Ajustes)").click();
+    await page.getByRole("button", { name: "Ejecutar" }).click();
+    await page.getByText("Con gestión automática.").waitFor({ timeout: 30000 });
+    await page.getByText("Aplicar gestión automática (Ajustes)").click();
   });
   await step("backtest con velas del bróker", async () => {
     await page.getByRole("button", { name: "Estrategias" }).click();

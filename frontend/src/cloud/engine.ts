@@ -19,6 +19,13 @@ export const STRAT_INFO: Record<string, { desc: string; params: Record<string, a
   ALB: { desc: "Ruptura en Londres del rango de Asia (01:05-09:00); el precio debe estar dentro del rango a las 09:00.", params: { range_start: "01:05", range_end: "09:00", fill_end: "18:00", sl_atr: 0.25, tp_r: 2, exit_time: "23:30" } },
   LM: { desc: "Momentum Asia -> Londres: a las 09:30 entra a favor del movimiento desde la apertura de las 01:05.", params: { open_time: "01:05", entry_time: "09:30", window_min: 5, sl_atr: 0.5, tp_r: 3, exit_time: "21:00" } },
 };
+// Ajustes de noticias, gestión automática y reglas de fondeo (los dos últimos solo los usa la web)
+export const EXTRA_DEFAULTS: Record<string, any> = {
+  news_enabled: false, news_before: 5, news_after: 5, news_impact: "high", news_close: false, news_close_min: 10,
+  mg_scope: "todas", be_enabled: false, be_r: 1, be_offset: 0.1, tr_enabled: false, tr_start_r: 1.5, tr_dist_r: 1,
+  pt_enabled: false, pt_r: 1, pt_pct: 50, min_days: 3, consistency_pct: 0,
+};
+const WEB_ONLY = new Set(["min_days", "consistency_pct"]);
 const START: Record<string, string> = { R50: "01:05", TOK: "03:30", AORB: "04:30", ALB: "09:00", LM: "09:30" };
 
 const CMD_MSG: Record<string, string> = {
@@ -32,6 +39,7 @@ export async function createCloud(accountId: string): Promise<Backend> {
   let store: BarStore | null = null, T: FeatTable | null = null, models: Models | null = null;
   let trades: any[] = [];
   let events: any[] = [];
+  let news: any[] = [];
   let signals: any = {};
   let lastLiveAt = 0;
   let status = "conectando";
@@ -96,12 +104,19 @@ export async function createCloud(accountId: string): Promise<Backend> {
       if (d[k] !== undefined && e[k] !== undefined && String(d[k]) !== String(e[k]) && !(typeof d[k] === "number" && Math.abs(d[k] - e[k]) < 1e-6)) pending.push(k);
     }
     for (const n of Object.keys(STRAT_INFO)) if (d.strategies?.[n] !== undefined && e.strategies?.[n] !== undefined && d.strategies[n] !== e.strategies[n]) pending.push(n);
+    const extra: Record<string, any> = {};
+    for (const k of Object.keys(EXTRA_DEFAULTS)) {
+      extra[k] = v(k, EXTRA_DEFAULTS[k]);
+      if (!WEB_ONLY.has(k) && d[k] !== undefined && e[k] !== undefined && String(d[k]) !== String(e[k]) && !(typeof d[k] === "number" && Math.abs(d[k] - e[k]) < 1e-6)) pending.push(k);
+    }
+    // un EA antiguo no conoce estos ajustes
+    const eaSupports = e.news_enabled !== undefined;
     return {
       symbol: symbol(), contract_size: contract(), magic: ea().magic, server_shift_min: shift(), autotrade: !!v("autotrade", false),
       risk: { risk_pct: Number(v("risk_pct", 0.3)), max_open_trades: Number(v("max_open_trades", 4)), use_time_exit: !!v("use_time_exit", true), compound: !!v("compound", true) },
       funding: { enabled: true, phase: Number(d.phase ?? (Number(e.target_pct) === 8 ? 1 : Number(e.target_pct) === 5 ? 2 : 0)), daily_loss_pct: 3, max_loss_pct: Number(e.max_loss_pct ?? 10),
         daily_guard_pct: Number(v("daily_guard_pct", 2.5)), max_guard_pct: Number(v("max_guard_pct", 9)), target_pct: Number(v("target_pct", 0)), initial_balance: Number(e.initial_balance || 0) },
-      strategies: strat, pending, ea_settings: e, web_settings: d,
+      strategies: strat, pending, ea_settings: e, web_settings: d, extra, ea_supports_extra: eaSupports,
     };
   }
   function eaInfo() {
@@ -111,18 +126,32 @@ export async function createCloud(accountId: string): Promise<Backend> {
   function market() {
     const m = st.market || {};
     if (!eaOnline()) return { open: false, reason: "el EA no está conectado", last_tick: live.t || null };
-    return { open: live.open ?? m.open ?? true, reason: "sin precios recientes del bróker", last_tick: live.t || null };
+    return { open: live.open ?? m.open ?? true, reason: "sin precios recientes del bróker", last_tick: live.t || null, news: m.news || null };
   }
   const journalRow = (t: any) => ({ id: t.id, ticket: Number(t.ticket), source: t.source, strategy: t.strategy, side: t.side, lots: t.lots, entry: t.entry,
     sl: t.sl0 ?? t.sl, tp: t.tp0 ?? t.tp, sl0: t.sl0, tp0: t.tp0, sl_now: t.sl, tp_now: t.tp, t_open: Number(t.t_open), exit: t.exit, t_close: t.t_close ? Number(t.t_close) : null,
     pnl: t.pnl, R: t.r, reason: t.reason, status: t.status, prediction: t.prediction, evaluation: t.evaluation, note: t.note || "" });
 
+  /** Segundos que el servidor del bróker va por delante de UTC (del último precio y la hora en que llegó). */
+  function srvOffset() {
+    if (live.t && live.updated_at) {
+      const o = Number(live.t) - Date.parse(live.updated_at) / 1000;
+      if (Math.abs(o) < 15 * 3600) return Math.round(o / 900) * 900;
+    }
+    return 2 * 3600;
+  }
+  async function loadNews() {
+    const now = nowS();
+    const { data } = await supabase.from("news").select("ts, country, title, impact, forecast, previous").gte("ts", now - 3 * 86400).lte("ts", now + 9 * 86400).order("ts");
+    news = data || [];
+    emit({ type: "state", state: { news, news_offset: srvOffset() } });
+  }
   function fullState() {
     return {
       status, broker: "cloud", role, me: me?.email, accountInfo: acc ? { id: acc.id, name: acc.name, login: acc.login, server: acc.server } : null,
       ea: eaInfo(), account: account(), positions: positions(), orders: orders(), risk: risk(), signals, strategies: strategies(), settings: settings(),
       tick: tick(), market: market(), models: models ? { entry: true, forecast: true, entry_meta: models.entry.meta, forecast_meta: models.forecast.meta } : {},
-      history: store?.length || 0, sim: null,
+      history: store?.length || 0, sim: null, news, news_offset: srvOffset(),
     };
   }
   const pushAccount = () => emit({ type: "account", account: account(), positions: positions(), orders: orders(), risk: risk(), market: market() });
@@ -386,6 +415,8 @@ export async function createCloud(accountId: string): Promise<Backend> {
     timers.push(window.setInterval(() => { if (alive) pushState(); }, 4000));
     timers.push(window.setInterval(() => { if (alive) pollBars(); }, 20000));
     timers.push(window.setInterval(() => { if (alive) updateSignals(); }, 30000));
+    loadNews().catch(() => {});
+    timers.push(window.setInterval(() => { if (alive) loadNews().catch(() => {}); }, 20 * 60000));
   }
   function stop() {
     alive = false;
@@ -409,6 +440,7 @@ export async function createCloud(accountId: string): Promise<Backend> {
         if (b.risk) for (const key of ["risk_pct", "max_open_trades", "use_time_exit", "compound"]) if (b.risk[key] !== undefined) patch[key] = b.risk[key];
         if (b.funding) { for (const key of ["daily_guard_pct", "max_guard_pct", "target_pct"]) if (b.funding[key] !== undefined) patch[key] = b.funding[key]; if (b.funding.phase !== undefined) patch.phase = b.funding.phase; }
         for (const key of ["autotrade", "risk_pct", "max_open_trades", "use_time_exit", "compound", "daily_guard_pct", "max_guard_pct", "target_pct", "phase"]) if (b[key] !== undefined) patch[key] = b[key];
+        if (b.extra) for (const k of Object.keys(EXTRA_DEFAULTS)) if (b.extra[k] !== undefined) patch[k] = b.extra[k];
         if (b.strategies) { patch.strategies = {}; for (const n of Object.keys(b.strategies)) patch.strategies[n] = typeof b.strategies[n] === "object" ? b.strategies[n].enabled !== false : !!b.strategies[n]; }
         if (!Object.keys(patch).length) { emit({ type: "settings", settings: settings() }); return { ok: true, settings: settings() }; }
         return patchSettings(patch);
@@ -449,6 +481,7 @@ export async function createCloud(accountId: string): Promise<Backend> {
         return { ok: true, pred: predictEntry(models, f, side, slD, tpR), tp_r: r2(tpR), sl_dist: r2(slD), lots: sz.lots, risk_money: r2(sz.risk), risk_note: sz.note, reward_money: tp ? r2(sz.lots * Math.abs(tp - entry) * contract()) : null };
       }
       case "GET /api/signals": updateSignals(); return signals;
+      case "GET /api/news": return { news, offset: srvOffset() };
       case "GET /api/bars": {
         if (!store) fail("Cargando velas…");
         const m = TFM[qs.get("tf") || "M5"] || 5;

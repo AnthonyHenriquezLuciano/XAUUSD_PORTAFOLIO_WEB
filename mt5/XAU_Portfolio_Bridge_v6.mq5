@@ -15,9 +15,11 @@
 //|  reapertura diaria del oro a las 01:00).                          |
 //|  v6: puente con la web XAU Portfolio AI (Supabase): envía precio, |
 //|  velas, cuenta y operaciones; ejecuta órdenes y ajustes de la web.|
+//|  v6.1: filtro de noticias (calendario desde la web) y gestión      |
+//|  automática de posiciones (break-even, trailing, cierre parcial).  |
 //+------------------------------------------------------------------+
 #property copyright   "Anthony Henriquez"
-#property version     "6.00"
+#property version     "6.10"
 #property description "Portafolio XAUUSD (R50, TOK, AORB, ALB, LM) con guardas FundingPips y puente con la web XAU Portfolio AI: la web muestra la cuenta y envía órdenes; el portafolio opera aquí."
 
 #include <Trade/Trade.mqh>
@@ -171,6 +173,30 @@ double   g_targetPct = 0.0;
 bool     g_lmEnable = true;
 bool     g_r5Enable = true;
 bool     g_autotrade = false;
+
+// filtro de noticias (calendario económico que envía la web; horas en UTC)
+bool     g_newsEnabled = false;
+int      g_newsBefore = 5, g_newsAfter = 5;   // minutos sin abrir operaciones antes / después
+int      g_newsMinImp = 3;                    // 3 = solo alto impacto, 2 = alto y medio
+bool     g_newsClose = false;                 // cerrar posiciones antes de la noticia
+int      g_newsCloseMin = 10;                 // ... tantos minutos antes
+long     g_newsT[];
+int      g_newsImp[];
+string   g_newsTitle[];
+long     g_newsVer = 0;
+
+// gestión automática de posiciones
+string   g_mgScope = "todas";                 // todas | portafolio | manuales (nunca toca otros EA)
+bool     g_beOn = false;                      // SL a break-even al llegar a +g_beR R (más g_beOff $)
+double   g_beR = 1.0;
+double   g_beOff = 0.10;
+bool     g_trOn = false;                      // trailing desde +g_trStartR R, a g_trDistR R del precio
+double   g_trStartR = 1.5;
+double   g_trDistR = 1.0;
+bool     g_ptOn = false;                      // cierre parcial de g_ptPct % a +g_ptR R
+double   g_ptR = 1.0;
+double   g_ptPct = 50.0;
+string   g_gvKey = "";
 
 
 //==================================================================
@@ -598,6 +624,8 @@ string TradesJson()
       if(!HasLong(now, g_openTk[i]) && !HasLong(g_closedPending, g_openTk[i]))
         {
          PushLong(g_closedPending, g_openTk[i]);
+         GlobalVariableDel(g_gvKey + "R" + IntegerToString(g_openTk[i]));
+         GlobalVariableDel(g_gvKey + "P" + IntegerToString(g_openTk[i]));
          int k = ArraySize(g_closedTries); ArrayResize(g_closedTries, k + 1); g_closedTries[k] = 0;
         }
    ArrayResize(g_openTk, ArraySize(now));
@@ -772,7 +800,9 @@ string StateJson()
                  ",\"factor\":" + JD(RiskFactor(), 2) + ",\"blocked\":" + (blocked == "" ? "null" : JS(blocked)) +
                  ",\"autotrade\":" + JB(g_autotrade) + "}";
 
-   string market = "{\"open\":" + JB(live) + ",\"last_tick\":" + (hasTick ? JI((long)tk.time) : "null") + "}";
+   int nk = g_newsEnabled ? NewsWindow(g_newsBefore, g_newsAfter) : -1;
+   string nws = (nk < 0) ? "null" : "{\"title\":" + JS(g_newsTitle[nk]) + ",\"t\":" + JI(g_newsT[nk]) + ",\"until\":" + JI(g_newsT[nk] + g_newsAfter * 60) + "}";
+   string market = "{\"open\":" + JB(live) + ",\"last_tick\":" + (hasTick ? JI((long)tk.time) : "null") + ",\"news\":" + nws + "}";
 
    string settings = "{\"autotrade\":" + JB(g_autotrade) + ",\"risk_pct\":" + JD(g_riskPct, 2) +
                      ",\"max_open_trades\":" + IntegerToString(g_maxOpen) + ",\"use_time_exit\":" + JB(g_useTimeExit) +
@@ -780,8 +810,15 @@ string StateJson()
                      ",\"max_guard_pct\":" + JD(g_maxGuardPct, 2) + ",\"target_pct\":" + JD(g_targetPct, 2) +
                      ",\"initial_balance\":" + JD(g_initBal, 2) + ",\"max_loss_pct\":" + JD(InpMaxLossPct, 2) +
                      ",\"strategies\":{\"LM\":" + JB(g_lmEnable) + ",\"AORB\":" + JB(g_ao.enabled) + ",\"TOK\":" + JB(g_tk.enabled) +
-                     ",\"R50\":" + JB(g_r5Enable) + ",\"ALB\":" + JB(g_al.enabled) + "}}";
-   string ea = "{\"version\":\"6.00\",\"symbol\":" + JS(_Symbol) + ",\"magic\":" + JI(InpMagic) + ",\"digits\":" + IntegerToString(_Digits) +
+                     ",\"R50\":" + JB(g_r5Enable) + ",\"ALB\":" + JB(g_al.enabled) + "}" +
+                     ",\"news_enabled\":" + JB(g_newsEnabled) + ",\"news_before\":" + IntegerToString(g_newsBefore) +
+                     ",\"news_after\":" + IntegerToString(g_newsAfter) + ",\"news_impact\":" + JS(g_newsMinImp >= 3 ? "high" : "medium") +
+                     ",\"news_close\":" + JB(g_newsClose) + ",\"news_close_min\":" + IntegerToString(g_newsCloseMin) +
+                     ",\"news_events\":" + IntegerToString(ArraySize(g_newsT)) +
+                     ",\"mg_scope\":" + JS(g_mgScope) + ",\"be_enabled\":" + JB(g_beOn) + ",\"be_r\":" + JD(g_beR, 2) + ",\"be_offset\":" + JD(g_beOff, 2) +
+                     ",\"tr_enabled\":" + JB(g_trOn) + ",\"tr_start_r\":" + JD(g_trStartR, 2) + ",\"tr_dist_r\":" + JD(g_trDistR, 2) +
+                     ",\"pt_enabled\":" + JB(g_ptOn) + ",\"pt_r\":" + JD(g_ptR, 2) + ",\"pt_pct\":" + JD(g_ptPct, 0) + "}";
+   string ea = "{\"version\":\"6.10\",\"symbol\":" + JS(_Symbol) + ",\"magic\":" + JI(InpMagic) + ",\"digits\":" + IntegerToString(_Digits) +
                ",\"contract\":" + JD(SymbolInfoDouble(_Symbol, SYMBOL_TRADE_CONTRACT_SIZE), 2) +
                ",\"vol_min\":" + JD(SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN), 2) +
                ",\"vol_step\":" + JD(SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_STEP), 2) +
@@ -804,6 +841,8 @@ string CmdOpen(JNode *pl, ulong &ticketOut, double &priceOut, double &lotsOut)
    if(side != 1 && side != -1) return "lado no válido";
    if(sl <= 0) return "falta el stop loss";
    if(g_permBlocked || g_targetHit || g_dailyBlocked) return "cuenta bloqueada por las guardas de fondeo";
+   string nwhy;
+   if(NewsBlocked(nwhy)) return "bloqueado por " + nwhy + " (filtro de noticias activo en Ajustes)";
    if(InpNoHedge && OppositeOpen(side)) return "hay una posición contraria abierta (FundingPips no permite cobertura)";
    MqlTick tk;
    if(!SymbolInfoTick(_Symbol, tk)) return "sin precio";
@@ -1038,7 +1077,196 @@ void ApplySettings(JNode *s)
       if(JHas(st, "TOK"))  { bool v = JBool(st, "TOK", g_tk.enabled);  if(v != g_tk.enabled) { g_tk.enabled = v; changes += " TOK " + (v ? "ON" : "OFF"); if(v && g_dayN > 0) ResetOrb(g_tk, wk, g_dayN); } }
       if(JHas(st, "ALB"))  { bool v = JBool(st, "ALB", g_al.enabled);  if(v != g_al.enabled) { g_al.enabled = v; changes += " ALB " + (v ? "ON" : "OFF"); if(v && g_dayN > 0) ResetOrb(g_al, wk, g_dayN); } }
      }
+   // filtro de noticias
+   SetB(s, "news_enabled", g_newsEnabled, " filtro de noticias", changes);
+   SetI(s, "news_before", g_newsBefore, 0, 120, " min antes", changes);
+   SetI(s, "news_after", g_newsAfter, 0, 120, " min después", changes);
+   if(JHas(s, "news_impact"))
+     {
+      int v = (JStr(s, "news_impact", "high") == "medium") ? 2 : 3;
+      if(v != g_newsMinImp) { g_newsMinImp = v; changes += (v == 3 ? " noticias: solo alto impacto" : " noticias: alto y medio impacto"); }
+     }
+   SetB(s, "news_close", g_newsClose, " cerrar antes de noticias", changes);
+   SetI(s, "news_close_min", g_newsCloseMin, 1, 120, " min antes del cierre por noticia", changes);
+   // gestión automática
+   if(JHas(s, "mg_scope"))
+     {
+      string v = JStr(s, "mg_scope", g_mgScope);
+      if((v == "todas" || v == "portafolio" || v == "manuales") && v != g_mgScope) { g_mgScope = v; changes += " gestión: " + v; }
+     }
+   SetB(s, "be_enabled", g_beOn, " break-even", changes);
+   SetD(s, "be_r", g_beR, 0.2, 10.0, " BE a R", changes);
+   SetD(s, "be_offset", g_beOff, 0.0, 20.0, " BE +$", changes);
+   SetB(s, "tr_enabled", g_trOn, " trailing", changes);
+   SetD(s, "tr_start_r", g_trStartR, 0.2, 20.0, " trailing desde R", changes);
+   SetD(s, "tr_dist_r", g_trDistR, 0.1, 10.0, " trailing a R", changes);
+   SetB(s, "pt_enabled", g_ptOn, " cierre parcial", changes);
+   SetD(s, "pt_r", g_ptR, 0.2, 20.0, " parcial a R", changes);
+   SetD(s, "pt_pct", g_ptPct, 5.0, 95.0, " parcial %", changes);
    if(changes != "") Log("Ajustes desde la web:" + changes, g_autotrade ? "warn" : "info");
+  }
+
+void SetB(JNode *s, const string k, bool &var, const string label, string &changes)
+  {
+   if(!JHas(s, k)) return;
+   bool v = JBool(s, k, var);
+   if(v != var) { var = v; changes += label + (v ? " ON" : " OFF"); }
+  }
+void SetI(JNode *s, const string k, int &var, const int lo, const int hi, const string label, string &changes)
+  {
+   if(!JHas(s, k)) return;
+   int v = (int)MathRound(JNum(s, k, var));
+   if(v >= lo && v <= hi && v != var) { var = v; changes += StringFormat("%s %d", label, v); }
+  }
+void SetD(JNode *s, const string k, double &var, const double lo, const double hi, const string label, string &changes)
+  {
+   if(!JHas(s, k)) return;
+   double v = JNum(s, k, var);
+   if(v >= lo && v <= hi && MathAbs(v - var) > 1e-9) { var = v; changes += StringFormat("%s %.2f", label, v); }
+  }
+
+// ---------------------------------------------------------------- filtro de noticias
+// Índice del evento cuya ventana [t - antes, t + después] contiene ahora (UTC), o -1
+int NewsWindow(const int before, const int after)
+  {
+   long now = (long)TimeGMT();
+   for(int i = 0; i < ArraySize(g_newsT); i++)
+     {
+      if(g_newsImp[i] < g_newsMinImp) continue;
+      if(now >= g_newsT[i] - (long)before * 60 && now <= g_newsT[i] + (long)after * 60) return i;
+     }
+   return -1;
+  }
+
+bool NewsBlocked(string &why)
+  {
+   if(!g_newsEnabled) return false;
+   int k = NewsWindow(g_newsBefore, g_newsAfter);
+   if(k < 0) return false;
+   why = StringFormat("noticia «%s» (%s UTC)", g_newsTitle[k], TimeToString((datetime)g_newsT[k], TIME_MINUTES));
+   return true;
+  }
+
+// Diferencia hora del servidor - UTC (redondeada a 15 min)
+long SrvOffset()
+  {
+   long o = (long)TimeTradeServer() - (long)TimeGMT();
+   return (long)MathRound(o / 900.0) * 900;
+  }
+
+// Cierra antes de la noticia las posiciones del EA y de la web abiertas hace menos de 5 h
+// (en FundingPips las abiertas con más de 5 h de antelación están exentas).
+void NewsCloseCheck()
+  {
+   if(!g_newsEnabled || !g_newsClose || TimeCurrent() < g_nextClose) return;
+   long now = (long)TimeGMT();
+   for(int i = 0; i < ArraySize(g_newsT); i++)
+     {
+      if(g_newsImp[i] < g_newsMinImp) continue;
+      long t = g_newsT[i];
+      if(now < t - (long)g_newsCloseMin * 60 || now >= t) continue;
+      long off = SrvOffset();
+      int n = 0, fails = 0;
+      for(int p = PositionsTotal() - 1; p >= 0; p--)
+        {
+         ulong tk = PositionGetTicket(p);
+         if(tk == 0 || PositionGetString(POSITION_SYMBOL) != _Symbol) continue;
+         long mg = PositionGetInteger(POSITION_MAGIC);
+         if(!IsOurMagic(mg) && mg != InpMagic) continue;
+         long openUtc = (long)PositionGetInteger(POSITION_TIME) - off;
+         if(openUtc <= t - 5 * 3600) continue;
+         if(trade.PositionClose(tk, InpSlippagePts)) n++; else fails++;
+        }
+      if(n > 0) Log(StringFormat("Noticia «%s»: %d posiciones cerradas antes del evento", g_newsTitle[i], n), "warn");
+      if(fails > 0) { Log(StringFormat("Noticia «%s»: %d cierres fallaron, reintento en 30 s", g_newsTitle[i], fails), "warn"); g_nextClose = TimeCurrent() + 30; }
+      return;
+     }
+  }
+
+// ---------------------------------------------------------------- gestión automática de posiciones
+bool MgScope(const long mg)
+  {
+   if(g_mgScope == "portafolio") return IsOurMagic(mg);
+   if(g_mgScope == "manuales") return (mg == InpMagic || mg == 0);
+   return IsOurMagic(mg) || mg == InpMagic || mg == 0;
+  }
+
+void ManagePositions()
+  {
+   if(!(g_beOn || g_trOn || g_ptOn) || TimeCurrent() < g_nextClose) return;
+   static uint lastRun = 0;
+   uint nowMs = GetTickCount();
+   if(lastRun != 0 && nowMs - lastRun < 1000) return;
+   lastRun = nowMs;
+   MqlTick tk;
+   if(!SymbolInfoTick(_Symbol, tk)) return;
+   double stops = (double)SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL) * _Point;
+   for(int i = PositionsTotal() - 1; i >= 0; i--)
+     {
+      ulong tkt = PositionGetTicket(i);
+      if(tkt == 0 || PositionGetString(POSITION_SYMBOL) != _Symbol) continue;
+      long mg = PositionGetInteger(POSITION_MAGIC);
+      if(!MgScope(mg)) continue;
+      long pid = PositionGetInteger(POSITION_IDENTIFIER);
+      int side = (PositionGetInteger(POSITION_TYPE) == POSITION_TYPE_BUY) ? 1 : -1;
+      double open = PositionGetDouble(POSITION_PRICE_OPEN), sl = PositionGetDouble(POSITION_SL);
+      double tp = PositionGetDouble(POSITION_TP), vol = PositionGetDouble(POSITION_VOLUME);
+      string gvR = g_gvKey + "R" + IntegerToString(pid), gvP = g_gvKey + "P" + IntegerToString(pid);
+      double R = GlobalVariableCheck(gvR) ? GlobalVariableGet(gvR) : 0.0;
+      if(R <= 0)
+        {
+         if(sl <= 0) continue;                       // sin SL inicial no hay R
+         R = MathAbs(open - sl);
+         if(R <= 0) continue;
+         GlobalVariableSet(gvR, R);                  // se guarda el riesgo inicial (el SL se moverá)
+        }
+      double px = (side > 0) ? tk.bid : tk.ask;      // precio al que se cerraría
+      double prof = (px - open) * side;
+      // 1) cierre parcial (una sola vez por posición)
+      if(g_ptOn && !GlobalVariableCheck(gvP) && prof >= g_ptR * R)
+        {
+         double vmin = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN);
+         double part = NormLots(vol * g_ptPct / 100.0);
+         if(part > 0 && vol - part >= vmin - 1e-9)
+           {
+            if(trade.PositionClosePartial(tkt, part, InpSlippagePts))
+              {
+               GlobalVariableSet(gvP, 1.0);
+               Log(StringFormat("Gestión: #%I64d cierre parcial de %.2f lotes a +%.2f R", pid, part, prof / R));
+              }
+            else
+              {
+               Log(StringFormat("Gestión: cierre parcial de #%I64d falló: %u %s", pid, trade.ResultRetcode(), trade.ResultRetcodeDescription()), "warn");
+               g_nextClose = TimeCurrent() + 30;
+              }
+            continue;                                // el SL se revisa en la siguiente pasada
+           }
+         GlobalVariableSet(gvP, 1.0);                // volumen demasiado pequeño para partir: no reintentar
+        }
+      // 2) SL a break-even y/o trailing: solo se mueve a favor
+      double newSl = sl;
+      if(g_beOn && prof >= g_beR * R)
+        {
+         double be = NormPrice(open + side * g_beOff);
+         if(newSl <= 0 || (side > 0 && be > newSl) || (side < 0 && be < newSl)) newSl = be;
+        }
+      if(g_trOn && prof >= g_trStartR * R)
+        {
+         double trl = NormPrice(px - side * g_trDistR * R);
+         if(newSl <= 0 || (side > 0 && trl > newSl) || (side < 0 && trl < newSl)) newSl = trl;
+        }
+      bool better = (newSl > 0) && (sl <= 0 || (side > 0 ? newSl > sl : newSl < sl));
+      if(better && MathAbs(newSl - sl) >= MathMax(10 * _Point, 0.02 * R) && (px - newSl) * side > stops)
+        {
+         if(trade.PositionModify(tkt, newSl, tp))
+            Log(StringFormat("Gestión: #%I64d SL %.2f -> %.2f (+%.2f R)", pid, sl, newSl, prof / R));
+         else
+           {
+            Log(StringFormat("Gestión: no se pudo mover el SL de #%I64d: %u %s", pid, trade.ResultRetcode(), trade.ResultRetcodeDescription()), "warn");
+            g_nextClose = TimeCurrent() + 30;
+           }
+        }
+     }
   }
 
 // ---------------------------------------------------------------- sincronización
@@ -1067,6 +1295,7 @@ void BridgeSync()
    if(trades != "") payload += ",\"trades\":[" + trades + "]";
    if(nLog > 0)     payload += ",\"events\":[" + Joined(g_logQ, nLog) + "]";
    if(nAck > 0)     payload += ",\"acks\":[" + Joined(g_ackQ, nAck) + "]";
+   payload += ",\"news_ver\":" + JI(g_newsVer);
    payload += "}";
    string body = "{\"p_key\":" + JS(InpBridgeKey) + ",\"p\":" + payload + "}";
 
@@ -1124,6 +1353,25 @@ void BridgeSync()
       g_lastBarSrv = (long)JNum(root, "last_bar", 0);
       long sts = (long)JNum(root, "settings_ts", 0);
       if(sts != g_settingsTs) { ApplySettings(root.Get("settings")); g_settingsTs = sts; }
+      JNode *nw = root.Get("news");
+      if(nw != NULL && nw.type == J_ARR)
+        {
+         int n = nw.Size();
+         ArrayResize(g_newsT, n); ArrayResize(g_newsImp, n); ArrayResize(g_newsTitle, n);
+         for(int i = 0; i < n; i++)
+           {
+            JNode *e = nw.At(i);
+            g_newsT[i] = 0; g_newsImp[i] = 1; g_newsTitle[i] = "";
+            if(e == NULL || e.type != J_ARR) continue;
+            JNode *e0 = e.At(0);
+            JNode *e1 = e.At(1);
+            JNode *e2 = e.At(2);
+            if(e0 != NULL) g_newsT[i] = (long)e0.num;
+            if(e1 != NULL) g_newsImp[i] = (int)e1.num;
+            if(e2 != NULL) g_newsTitle[i] = e2.str;
+           }
+         g_newsVer = (long)JNum(root, "news_ver", 0);
+        }
       JNode *cmds = root.Get("commands");
       if(cmds != NULL && cmds.type == J_ARR)
          for(int i = 0; i < cmds.Size(); i++)
@@ -1432,6 +1680,12 @@ double RiskFactor()
 // RES_DONE: abierta o descartada a propósito | RES_RETRY: fallo, reintentar | RES_WAIT: esperar
 int OpenTrade(const int dir, const double slDist, const double tpR, const long magic, const string cmt)
   {
+   string nwhy;
+   if(NewsBlocked(nwhy))
+     {
+      Log(StringFormat("%s: omitido por %s (filtro de noticias)", cmt, nwhy), "warn");
+      return RES_DONE;
+     }
    if(g_maxOpen > 0 && CountOpenEA() >= g_maxOpen)
      {
       Log(StringFormat("%s: omitido (límite de %d operaciones simultáneas)", cmt, g_maxOpen));
@@ -1706,7 +1960,7 @@ void ShowPanel(const int mod)
    string r5 = !g_r5Enable ? "R50 off" : StringFormat("R50 %s (%.2f / %.2f)", (g_r5Done ? "hecho" : "pendiente"), g_r5Dn, g_r5Up);
    string lm = !g_lmEnable ? "LM off" : StringFormat("LM %s", (g_lmDone ? "hecho" : "pendiente"));
    string cb = g_compound ? StringFormat("compuesto ON, base %.2f", g_riskBase) : StringFormat("compuesto OFF, base %.2f", g_initBal);
-   Comment("Web: " + g_bridgeStatus + (g_autotrade ? "  |  Automático ON" : "  |  Automático OFF") + "\n" + StringFormat("XAU Portfolio Bridge v6.00  |  %s\n"
+   Comment("Web: " + g_bridgeStatus + (g_autotrade ? "  |  Automático ON" : "  |  Automático OFF") + "\n" + StringFormat("XAU Portfolio Bridge v6.10  |  %s\n"
                         "Balance inicial %.2f  |  Equity %.2f  |  Ref. día %.2f\n"
                         "Suelo diario %.2f  |  Suelo máx %.2f  |  Freno DD x%.2f\n"
                         "ATR %.2f  |  Riesgo %.2f%% (%s)  |  Cierre por tiempo %s  |  Abiertas %d/%d\n"
@@ -1744,6 +1998,12 @@ void Process()
       CloseMagic(g_tk.magic, true);
       CloseMagic(g_magicR5, true);
       CloseMagic(g_al.magic, true);
+     }
+
+   if(!(g_permBlocked || g_targetHit || g_dailyBlocked))
+     {
+      NewsCloseCheck();
+      ManagePositions();
      }
 
    if(g_autotrade && !(g_permBlocked || g_targetHit || g_dailyBlocked))
@@ -1788,6 +2048,7 @@ int OnInit()
    g_autotrade     = InpAutoTrade;
    g_lastBarSrv    = -1;
    g_barSkip       = 0;
+   g_newsVer       = 0;
    g_settingsTs    = 0;
    g_backfillQueued = false;
    m_lmOpen  = ParseHM(InpLM_OpenTime);
@@ -1842,6 +2103,7 @@ int OnInit()
    g_gvDayKey = key + "DKEY";
    g_gvDayRef = key + "DREF";
    g_gvRiskBase = key + "RBASE";
+   g_gvKey      = key;
 
    string gvRid = key + "RID";
    if(InpResetId > 0 && (!GlobalVariableCheck(gvRid) || (int)GlobalVariableGet(gvRid) != InpResetId))
@@ -1880,7 +2142,7 @@ int OnInit()
       Log("Falta InpBridgeKey: crea la cuenta en la web, copia su clave en las entradas del EA y vuelve a cargarlo.", "warn");
    if(InpWebEnable && !MQLInfoInteger(MQL_TESTER))
       Log("Conectando con la web. Si no conecta, añade " + InpWebURL + " en Herramientas → Opciones → Asesores expertos → Permitir WebRequest.");
-   Log(StringFormat("XAU Portfolio Bridge v6 iniciado. Balance inicial %.2f, riesgo %.2f%%", g_initBal, g_riskPct));
+   Log(StringFormat("XAU Portfolio Bridge v6.10 iniciado. Balance inicial %.2f, riesgo %.2f%%", g_initBal, g_riskPct));
    return INIT_SUCCEEDED;
   }
 
