@@ -22,7 +22,8 @@ export function Tip({ text, size = 14 }: { text: React.ReactNode; size?: number 
     <span ref={ref} className="tip" tabIndex={0} role="button" aria-label="Más información"
       onMouseEnter={() => setOpen(true)} onMouseLeave={() => { setOpen(false); setPos(null); }}
       onFocus={() => setOpen(true)} onBlur={() => { setOpen(false); setPos(null); }}
-      onClick={(e) => { e.stopPropagation(); e.preventDefault(); setOpen((o) => !o); if (open) setPos(null); }}>
+      onClick={(e) => { e.stopPropagation(); e.preventDefault(); setOpen((o) => !o); if (open) setPos(null); }}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(o => !o); } else if (e.key === "Escape") { setOpen(false); setPos(null); } }}>
       <Icon name="info" size={size} />
       {open ? <span ref={pop} className="tip-pop" role="tooltip" style={pos ? { left: pos.left, top: pos.top } : { visibility: "hidden", left: 0, top: 0 }}>{text}</span> : null}
     </span>
@@ -55,7 +56,16 @@ export function Num({ value, onChange, step = 0.01, min, max, disabled, id, suff
 export function Seg<T extends string>({ value, options, onChange, full }: { value: T; options: [T, string][]; onChange: (v: T) => void; full?: boolean }) {
   return (
     <div className={`seg ${full ? "full" : ""}`} role="radiogroup">
-      {options.map(([v, l]) => <button type="button" key={v} role="radio" aria-checked={value === v} className={value === v ? "on" : ""} onClick={() => onChange(v)}>{l}</button>)}
+      {options.map(([v, l], i) => <button type="button" key={v} role="radio" aria-checked={value === v}
+        tabIndex={value===v?0:-1} className={value === v ? "on" : ""} onClick={() => onChange(v)}
+        onKeyDown={(e) => {
+          const d = e.key==="ArrowRight"||e.key==="ArrowDown" ? 1 : e.key==="ArrowLeft"||e.key==="ArrowUp" ? -1 : 0;
+          const next = e.key==="Home" ? 0 : e.key==="End" ? options.length-1 : d ? (i+d+options.length)%options.length : null;
+          if(next===null)return;
+          e.preventDefault();onChange(options[next][0]);
+          const buttons=e.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('button[role="radio"]');
+          buttons?.[next]?.focus();
+        }}>{l}</button>)}
     </div>
   );
 }
