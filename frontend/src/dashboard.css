@@ -1,0 +1,53 @@
+/* Stage 4 · Institutional dashboard grammar */
+.institutional-metric-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;align-items:stretch}
+.institutional-metric{display:flex;flex-direction:column;gap:10px;min-width:0;padding:18px 18px 15px;border:1px solid var(--line);
+  border-radius:12px;background:linear-gradient(145deg,#1B2229,#11171D);position:relative;overflow:hidden}
+.institutional-metric:before{content:"";width:34px;height:2px;border-radius:2px;position:absolute;top:0;left:18px;background:#5E6770}
+.institutional-metric.gold:before{background:var(--gold)}
+.institutional-metric.positive:before{background:var(--buy)}
+.institutional-metric.negative:before{background:var(--sell)}
+.institutional-metric.caution:before{background:var(--warn)}
+.institutional-metric-label{font-size:11.5px;font-weight:550;color:var(--muted);line-height:1.5}
+.institutional-metric-value{display:block;font:600 clamp(15px,1.6vw,22px)/1.3 var(--mono);color:#EFEDE7;overflow-wrap:anywhere}
+.institutional-metric.positive .institutional-metric-value{color:var(--buy)}
+.institutional-metric.negative .institutional-metric-value{color:var(--sell)}
+.institutional-metric.caution .institutional-metric-value{color:var(--warn)}
+.institutional-metric.gold .institutional-metric-value{color:var(--gold-hi)}
+.institutional-metric-footer{margin-top:auto;display:flex;align-items:flex-start;gap:6px;flex-wrap:wrap;justify-content:space-between;min-width:0}
+.institutional-metric-detail{font-size:10.5px;color:var(--muted);line-height:1.5}
+.institutional-metric-source{font-size:9px;font-weight:600;letter-spacing:.01em;color:#C0C8D1;
+  background:#283139;border:1px solid #38434D;border-radius:4px;padding:3px 6px;white-space:nowrap}
+.institutional-section-heading{display:flex;justify-content:space-between;align-items:center;gap:15px}
+.institutional-section-heading h2{font-size:18px;letter-spacing:-.03em;line-height:1.2;margin:4px 0}
+.institutional-section-heading p{margin:6px 0 0;font-size:12px;color:var(--muted)}
+.institutional-section-eyebrow{font-size:10px;letter-spacing:1px;font-weight:650;color:var(--gold)}
+.institutional-section-actions{display:flex;align-items:center;gap:8px}
+.overview-metrics{margin-bottom:3px}
+.premium-grid{column-gap:16px;row-gap:16px}
+.premium-module{background:linear-gradient(152deg,#1C2228,#12171D)}
+.premium-module-head{border-bottom-color:rgba(255,255,255,.075);padding-top:16px}
+.premium-module-body{gap:12px}
+.premium-overview{border-color:var(--line)}
+.premium-overview>div{background:#171D23}
+.kpi-row{gap:9px;background:none;border:0;overflow:visible}
+.kpi-row>.stat{border:1px solid var(--line);border-radius:10px;background:#192027;padding:14px;min-width:0}
+.kpi-row>.stat .stat-v{font-size:20px}
+.science-section,.portfolio-list,.safety-ledger{gap:16px}
+.science-section h2,.portfolio-list h2,.safety-ledger h2{font-size:18px;letter-spacing:-.035em}
+.science-data-grid>div,.portfolio-item{background:#171D23}
+.science-data-grid>div{padding:13px}
+.science-metrics>div,.portfolio-metrics>div,.safety-metric{border-color:var(--line)}
+.portfolio-list-title{border-bottom:1px solid var(--line);padding-bottom:12px}
+.safety-table th{color:#B4BEC9;background:#1B2229;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.45px}
+.safety-table td{color:var(--text)}
+.safety-table tbody tr:hover{background:rgba(200,170,120,.035)}
+@media(max-width:1100px){.institutional-metric-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:560px){
+ .institutional-metric-grid{gap:8px}
+ .institutional-metric{padding:13px;gap:8px}
+ .institutional-metric-value{font-size:15px}
+ .institutional-metric-source{font-size:8px}
+ .kpi-row{gap:6px}
+ .kpi-row>.stat{padding:11px}
+}
+@media(max-width:360px){.institutional-metric-grid{grid-template-columns:1fr}}
