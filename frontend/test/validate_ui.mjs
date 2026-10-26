@@ -38,13 +38,13 @@ import { readdirSync } from "node:fs";
 const compiled = readdirSync("dist/assets").filter(x=>x.endsWith(".css"))
   .map(x=>read("dist/assets/"+x)).join("\n");
 assert.ok(compiled.length>1000,"compiled CSS must exist");
-const gridRules = [...compiled.matchAll(/\\.chartwrap\\s*\\{([^}]*grid-template-rows:[^}]*)\\}/g)]
+const gridRules = [...compiled.matchAll(/\.chartwrap\s*\{([^}]*grid-template-rows:[^}]*)\}/g)]
  .map(x=>x[1]);
 assert.ok(gridRules.length>0,"compiled CSS contains explicit chart grid tracks");
 const lastGrid=gridRules[gridRules.length-1];
-assert.ok(!/grid-template-rows:\\s*auto\\s+1fr/.test(lastGrid),
+assert.ok(!/grid-template-rows:\s*auto\s+1fr/.test(lastGrid),
  "regression: compiled CSS leaves toolbar in full-height second row");
-assert.ok(/grid-template-rows:\\s*(?:auto|min-content)\\s+(?:auto|min-content)\\s+minmax\\(0,\\s*1fr\\)/.test(lastGrid),
+assert.ok(/grid-template-rows:\s*(?:auto|min-content)\s+(?:auto|min-content)\s+minmax\(0,\s*1fr\)/.test(lastGrid),
  "compiled CSS must contain three tracks and a flexible plot");
 assert.ok(read("src/components/LoadingState.tsx").includes('aria-live="polite"'));
 assert.ok(entry.includes('"@fontsource/ibm-plex-sans/400.css"'));
