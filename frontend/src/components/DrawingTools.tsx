@@ -14,6 +14,7 @@ type Props = {
   timesRef: React.MutableRefObject<number[]>;
   barsRef: React.MutableRefObject<Bar[]>;
   tf: number; theme: ChartTheme; drawKey: DrawKey | null;
+  onProfileRange?: (range: {start:number; end:number} | null) => void;
 };
 
 const I = (d: string) => <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>;
@@ -25,14 +26,15 @@ const TOOLS: [Tool, string, React.ReactNode][] = [
   ["ray", "Rayo (se prolonga)", I("M4 15L18 3M4 15a1.5 1.5 0 1 0 0 .01M10 10a1.5 1.5 0 1 0 0 .01")],
   ["vline", "Línea vertical", I("M10 2v16")],
   ["rect", "Rectángulo / zona", I("M3 6h14v8H3z")],
+  ["profile", "VP · Perfil de volumen (2 puntos)", I("M3 4v12M3 5h12M3 8h8M3 11h14M3 14h6")],
   ["fib", "Retroceso de Fibonacci", I("M2 4h16M2 8h16M2 11h16M2 14h16M2 17h16")],
   ["text", "Texto", I("M5 5h10M10 5v11")],
   ["measure", "Medir (precio, % y tiempo)", I("M3 17L17 3M3 12v5h5M17 8V3h-5")],
 ];
-const NAMES: Record<string, string> = { hline: "Línea horizontal", hray: "Rayo horizontal", trend: "Tendencia", ray: "Rayo", vline: "Línea vertical", rect: "Rectángulo", fib: "Fibonacci", text: "Texto" };
+const NAMES: Record<string, string> = { hline: "Línea horizontal", hray: "Rayo horizontal", trend: "Tendencia", ray: "Rayo", vline: "Línea vertical", rect: "Rectángulo", profile: "VP · Perfil de volumen", fib: "Fibonacci", text: "Texto" };
 const LSP = "xauai.drawprefs";
 
-export default function DrawingTools({ ready, open, box, chartRef, candleRef, timesRef, barsRef, tf, theme, drawKey }: Props) {
+export default function DrawingTools({ ready, open, box, chartRef, candleRef, timesRef, barsRef, tf, theme, drawKey, onProfileRange }: Props) {
   const { toast, ask } = useApp();
   const prefs = (() => { try { return JSON.parse(localStorage.getItem(LSP) || "{}"); } catch { return {}; } })();
   const [tool, setTool] = useState<Tool>("cursor");
@@ -47,6 +49,8 @@ export default function DrawingTools({ ready, open, box, chartRef, candleRef, ti
   live.current = { list, selected, tool, magnet, hidden, color, tf, theme, drawKey };
   const draft = useRef<Drawing | null>(null);
   const measure = useRef<{ a: Pt; b: Pt } | null>(null);
+  const rangeCallback = useRef(onProfileRange);
+  rangeCallback.current = onProfileRange;
 
   useEffect(() => { try { localStorage.setItem(LSP, JSON.stringify({ magnet, hidden, color })); } catch { /* sin almacenamiento */ } }, [magnet, hidden, color]);
 
@@ -76,6 +80,15 @@ export default function DrawingTools({ ready, open, box, chartRef, candleRef, ti
     loadDrawings(drawKey).then((d) => { if (!cancel) setList(d); }).catch((e) => { if (!/does not exist|schema cache/i.test(e.message)) toast(`No se pudieron cargar los dibujos: ${e.message}`, "error"); });
     return () => { cancel = true; };
   }, [drawKey?.cloud, drawKey?.account]);
+
+  useEffect(() => {
+    // Selecting any saved profile loads its time bounds. A freshly drawn or edited profile
+    // also becomes active. No M1 data is stored inside the drawing, only time anchors.
+    const picked = list.find(x => x.id === selected && x.kind === "profile" && x.b) ||
+      [...list].reverse().find(x => x.kind === "profile" && x.b);
+    rangeCallback.current?.(picked?.b ? { start: Math.min(picked.a.t,picked.b.t),
+      end: Math.max(picked.a.t,picked.b.t) + tf } : null);
+  }, [list, selected, hidden, tf, drawKey?.account]);
 
   const persist = (d: Drawing, next: Drawing[]) => {
     const k = live.current.drawKey;
