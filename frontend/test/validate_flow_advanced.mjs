@@ -19,7 +19,7 @@ for(let i=0;i<12*1440;i++){
   const price=2400+8*Math.sin(i/45)+2*Math.sin(i/11)+.15*Math.sin(i/3);
   raw.ts.push(ts+i*60);raw.o.push(price-.12);raw.h.push(price+.65);
   raw.l.push(price-.65);raw.c.push(price+.14);
-  raw.v.push(i>11*1440-15?80:20+i%8);raw.sp.push(.16);
+  raw.v.push(i>12*1440-16?80:20+i%8);raw.sp.push(.16);
 }
 const st=new BarStore(raw),end=raw.ts[raw.ts.length-1]+59;
 const pressure=volumePressure(st,end-6*3600,end+1,end);
