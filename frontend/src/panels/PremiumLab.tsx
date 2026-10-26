@@ -123,7 +123,7 @@ export default function PremiumLab() {
 
   return <div className="premium-center">
     <div className="premium-hero">
-      <div><div className="premium-eyebrow">XAU PORTFOLIO · RESEARCH WORKSPACE</div><h1>Portfolio Lab</h1>
+      <div><div className="premium-eyebrow">INVESTIGACIÓN / SIMULACIÓN</div><h1>Laboratorio de estrategias</h1>
         <p>Decisiones, escenarios, ejecución virtual y revisión de operaciones.</p></div>
       <button className="btn sm" onClick={() => ui.setTab("estrategias")}>Backtest de estrategias</button>
     </div>
@@ -157,7 +157,7 @@ export default function PremiumLab() {
       </div>}
     </div>}
     {tab === "portfolio" && <div className="premium-lab-card">
-      <h2>Monte Carlo · Bootstrap por bloques</h2>
+      <h2>Simulación Monte Carlo</h2>
       <p className="premium-note">Remuestreo de bloques de 3 operaciones usando los R realizados de tu diario. 1,000 trayectorias, misma cantidad de operaciones, riesgo fijo sobre equity. No modela cambios de mercado, fechas de fondeo, slippage ni límite diario.</p>
       {fetching && <div className="premium-note">Cargando historial…</div>}
       {err && <div className="premium-warn">{err}</div>}
@@ -176,7 +176,7 @@ export default function PremiumLab() {
       <p className="premium-note">Esto NO es una tasa de aprobación de FundingPips: no contempla objetivos por fase, guardas intradía ni días mínimos. La prueba rigurosa requiere simulación de secuencias temporales completas.</p>
     </div>}
     {tab === "shadow" && <div className="premium-lab-card">
-      <h2>Shadow Trading · Libro virtual</h2>
+      <h2>Operaciones simuladas</h2>
       <p className="premium-note">Registra operaciones de práctica sin enviarlas a MT5. El PnL abierto se actualiza al visualizar la web; NO hay vigilancia, cierre automático por SL/TP ni sincronización entre dispositivos.</p>
       <div className="premium-actions"><button className="btn sm buy" disabled={!live || !atr} onClick={() => makeVirtual(1)}>Abrir compra virtual</button>
         <button className="btn sm sell" disabled={!live || !atr} onClick={() => makeVirtual(-1)}>Abrir venta virtual</button></div>
@@ -192,7 +192,7 @@ export default function PremiumLab() {
       {!virtual.length && <p className="premium-note">Todavía no hay operaciones virtuales.</p>}
     </div>}
     {tab === "replay" && <div className="premium-lab-card">
-      <h2>Replay de operaciones · Registro histórico</h2>
+      <h2>Reproducción histórica</h2>
       <p className="premium-note">Reproduce velas reales del bróker progresivamente y revisa el historial de ejecuciones. No incluye ticks intrabar ni garantiza que las fechas del servidor y el registro de operaciones coincidan sin verificar la zona horaria.</p>
       <CandleReplay />
       {err && <div className="premium-warn">{err}</div>}
