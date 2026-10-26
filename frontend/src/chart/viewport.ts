@@ -2,8 +2,8 @@
  * back to latest prices (or to the beginning of a 30-day history).
  * Only change TF/account resets a range. No trading/data side effects.
  */
-import type { IChartApi, IRange, Logical, Time } from "lightweight-charts";
-export type ViewportSnapshot = { follow:boolean; time:IRange<Time>|null; logical:IRange<Logical>|null; width:number };
+import type { IChartApi, Range, Logical, Time } from "lightweight-charts";
+export type ViewportSnapshot = { follow:boolean; time:Range<Time>|null; logical:Range<Logical>|null; width:number };
 const RANGE=160;
 export function captureViewport(chart:IChartApi,oldCount:number):ViewportSnapshot {
  const scale=chart.timeScale(),logical=scale.getVisibleLogicalRange(),time=scale.getVisibleRange();
@@ -15,12 +15,12 @@ export function restoreViewport(chart:IChartApi,snapshot:ViewportSnapshot|null,n
  if(n<=0)return;
  const scale=chart.timeScale();
  if(reset||!snapshot){
-   scale.setVisibleLogicalRange({from:Math.max(-2,n-RANGE),to:n+8} as IRange<Logical>);
+   scale.setVisibleLogicalRange({from:Math.max(-2,n-RANGE),to:n+8} as Range<Logical>);
    return;
  }
  if(snapshot.follow){
    // Retain the zoom while following the rightmost candles.
-   scale.setVisibleLogicalRange({from:n-snapshot.width+8,to:n+8} as IRange<Logical>);
+   scale.setVisibleLogicalRange({from:n-snapshot.width+8,to:n+8} as Range<Logical>);
    return;
  }
  if(snapshot.time){
