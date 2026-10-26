@@ -146,7 +146,7 @@ function ConnectEA({ acc, back, open }: { acc: any; back: () => void; open: () =
       <div className="row between"><h3>Conectar el EA · {acc.name}</h3><button className="btn sm ghost" onClick={back}>Volver</button></div>
       <ol className="steps">
         <li><b>Descarga el EA</b> y cópialo en MT5 → Archivo → Abrir carpeta de datos → MQL5 → Experts. Ábrelo en MetaEditor y compila (F7).
-          <div style={{ marginTop: 8 }}><a className="btn sm" href="/ea/XAU_Portfolio_Bridge_v6.mq5" download>Descargar XAU_Portfolio_Bridge_v6.mq5</a></div></li>
+          <div style={{ marginTop: 8 }}><a className="btn sm" href={`${import.meta.env.BASE_URL}ea/XAU_Portfolio_Bridge_v6.mq5`} download>Descargar XAU_Portfolio_Bridge_v6.mq5</a></div></li>
         <li><b>Permite la conexión</b> en MT5 → Herramientas → Opciones → Asesores expertos → «Permitir WebRequest» y añade:<Copy text={SUPABASE_URL} /></li>
         <li><b>Genera la clave</b> de esta cuenta. <button className="btn sm primary" onClick={gen}>Generar clave</button>
           {key ? <><Copy text={key} /><div className="note warn" style={{ marginTop: 6 }}>Cópiala ahora: no se vuelve a mostrar.</div></> : null}
