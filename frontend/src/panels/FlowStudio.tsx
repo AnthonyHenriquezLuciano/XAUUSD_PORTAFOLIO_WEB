@@ -58,6 +58,7 @@ export default function FlowStudio() {
       <label><input type="checkbox" checked={ui.layers.volumen !== false} onChange={e=>ui.setLayer("volumen",e.target.checked)} />Histograma de ticks</label>
       <label><input type="checkbox" checked={ui.layers.flujo !== false} onChange={e=>ui.setLayer("flujo",e.target.checked)} />Perfil en gráfico</label>
       <label><input type="checkbox" checked={ui.layers.fvg !== false} onChange={e=>ui.setLayer("fvg",e.target.checked)} />FVG M5</label>
+      <label><input type="checkbox" checked={ui.layers.heatmap !== false} onChange={e=>ui.setLayer("heatmap",e.target.checked)} />Mapa de confluencias</label>
     </div>
     <div className="flow-section">
       <div className="flow-line"><b>Resolución del perfil</b><select aria-label="Número de niveles de volumen" value={f.bins} onChange={e=>ui.setFlow({bins:Number(e.target.value)})}>
@@ -94,6 +95,33 @@ export default function FlowStudio() {
       </div>
       <p className="premium-note">*Son aproximaciones basadas en la ubicación del cierre de cada vela M1, NO compras ni ventas ejecutadas. No se dispone de delta agresor real, CVD de transacciones ni libro de órdenes.</p>
       {pressure.absorptionHint&&<p className="flow-info">Volumen expandido y desplazamiento limitado: posible actividad bidireccional. No demuestra absorción institucional.</p>}
+    </section>}
+    {d?.suite && showVolume && <section className="flow-section institutional-suite">
+      <span className="flow-section-caption">VOLUME SUITE · ESTRUCTURA DE ACTIVIDAD</span>
+      <div className="flow-indicator-grid">
+        <div><span>VWAP anclado al perfil*</span><b>{d.suite.anchoredVwap==null?"N/D":fmt(d.suite.anchoredVwap)}</b><small>Inicio del perfil: {d.suite.anchorTime?new Date(d.suite.anchorTime*1000).toISOString().slice(11,16)+" (servidor)":"N/D"}</small></div>
+        <div><span>RVOL según hora*</span><b>{d.suite.timeOfDayRvol==null?"N/D":d.suite.timeOfDayRvol.toFixed(2)+"×"}</b><small>{d.suite.baselineDays} días comparables</small></div>
+        <div><span>Desarrollo del POC</span><b>{d.suite.momentum==="rising"?"Desplazamiento alcista":d.suite.momentum==="falling"?"Desplazamiento bajista":d.suite.momentum==="mixed"?"Estable":"N/D"}</b><small>No indica trayectoria futura</small></div>
+        <div><span>Esfuerzo / resultado*</span><b>{d.suite.effortResult==null?"N/D":d.suite.effortResult.toFixed(2)+"×"}</b><small>Desplazamiento neto / rango M1 promedio</small></div>
+      </div>
+      {!!d.suite.developing.length&&<div className="flow-developing">
+        <b>Developing POC · avance del perfil</b>
+        <div>{d.suite.developing.map(pt=><span key={pt.fraction}>
+          <small>{Math.round(pt.fraction*100)}%</small><strong>{fmt(pt.poc)}</strong>
+        </span>)}</div>
+      </div>}
+      <p className="premium-note">*Se utiliza el volumen de ticks del bróker: el VWAP es aproximado, RVOL compara la misma franja del reloj de MT5 y el esfuerzo no demuestra absorción institucional.</p>
+    </section>}
+    {d?.heatmap && showLevels && <section className="flow-section liquidity-inspector">
+      <span className="flow-section-caption">HEATMAP · CONFLUENCIAS DE PRECIO (NO ORDER BOOK)</span>
+      <div className="flow-line"><span>Mapa visible</span>
+        <label><input type="checkbox" checked={ui.layers.heatmap !== false}
+          onChange={e=>ui.setLayer("heatmap",e.target.checked)}/>Mostrar en gráfico</label></div>
+      {d.heatmap.length?d.heatmap.slice(0,6).map(zone=><div className="liquidity-row" key={zone.id}>
+        <div><b>{fmt(zone.price)}</b><small>{zone.sources.join(" · ")}</small></div>
+        <span>{zone.sourceCount} fuentes</span>
+      </div>):<p className="premium-note">No aparecen zonas con al menos dos evidencias independientes en el perfil actual.</p>}
+      <p className="premium-note">El sombreado muestra coincidencia entre POC, VAH/VAL, máximos anteriores, HVN, FVG y barridos. No observa órdenes pendientes, liquidez real ni probabilidad de rebote.</p>
     </section>}
     {!canWork && <div className="premium-warn">El análisis de flujo necesita una cuenta MT5 conectada con velas M1. No se generan valores ficticios.</div>}
     {f.mode==="fixed" && <div className="flow-info">
