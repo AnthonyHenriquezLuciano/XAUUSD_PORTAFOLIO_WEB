@@ -73,3 +73,17 @@
 .flow-level-prob .flow-reach{display:flex;align-items:flex-end;flex-direction:column;gap:4px;min-width:70px;font:700 15px var(--mono);color:var(--gold-hi)}
 .flow-level-prob .flow-reach small{font:500 9.5px var(--font);color:var(--muted);white-space:nowrap}
 @media(prefers-reduced-motion:reduce){.flow-pressure-meter>div{transition:none}}
+
+/* Market microstructure hypotheses: evidence and tick-volume provenance. */
+.institutional-suite .flow-indicator-grid{gap:9px}
+.flow-developing{display:flex;flex-direction:column;gap:9px;border:1px solid #3a444c;background:#161e25;border-radius:8px;padding:11px}
+.flow-developing>b{font-size:11px;color:#d8b87e}
+.flow-developing>div{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.flow-developing>div span{display:flex;flex-direction:column;gap:5px;padding:7px;background:#232c34;border-radius:6px;min-width:0}
+.flow-developing small{font-size:10px;color:#a2afbc}
+.flow-developing strong{font:600 11px var(--mono);color:#e8dfcd;overflow-wrap:anywhere}
+.liquidity-row{display:flex;justify-content:space-between;align-items:center;gap:9px;padding:10px;background:#161e25;border:1px solid #38434d;border-radius:7px}
+.liquidity-row>div{display:flex;flex-direction:column;gap:5px;min-width:0}
+.liquidity-row b{font:650 13px var(--mono);color:#dec28f}
+.liquidity-row small{color:#a4b2bf;font-size:10px;line-height:1.4}
+.liquidity-row>span{font-size:10px;color:#c6ad7c;white-space:nowrap}

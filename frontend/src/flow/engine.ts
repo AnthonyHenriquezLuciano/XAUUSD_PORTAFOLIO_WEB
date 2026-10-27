@@ -7,6 +7,7 @@ import { BarStore, dayOf, dowOf, lowerBound } from "../ai/bars";
 import { chartSessionWindows, type SessionId } from "../sessions/marketSessions";
 import { volumePressure, type FlowPressure } from "./volumeSignals";
 import type { ReachEvidence } from "./reach";
+import {buildVolumeSuite,buildLiquidityMap,type VolumeSuite,type LiquidityCluster} from "./institutionalSuite";
 
 export type FlowMode = "session" | "fixed" | "recent";
 export type FlowScope = SessionId | "day";
@@ -24,6 +25,7 @@ export type FlowResponse = {
   ok: boolean; mode: FlowMode; scope: FlowScope; title: string; profile: FlowProfile | null;
   levels: FlowLevel[]; gaps: Gap[]; sweeps: Sweep[]; price: number | null; vwap: number | null;
   pressure: FlowPressure | null; reach?: ReachEvidence[];
+  suite?:VolumeSuite;heatmap?:LiquidityCluster[];
   direction: "above_poc" | "below_poc" | "at_poc" | "unknown";
   evidence: string[]; quality: { validBars: number; withVolume: number; coveragePct: number; cutoff: number; disclaimer: string };
 };
@@ -221,6 +223,8 @@ export function buildFlow(st: BarStore, now: number, opts: {
     pwHigh = Math.max(pwHigh, st.dHigh[i]); pwLow = Math.min(pwLow, st.dLow[i]);
   }
   if (pwHigh > -Infinity) { add("PWH", "PWH · semana anterior", pwHigh, "Semana calendario anterior"); add("PWL", "PWL · semana anterior", pwLow, "Semana calendario anterior"); }
+  const suite=buildVolumeSuite(st,profile,cutoff);
+  const heatmap=buildLiquidityMap(levels,gaps,sweeps,profile,cutoff);
   const direction = !profile || price == null ? "unknown" :
     Math.abs(price - profile.poc) <= Math.max(.02,(profile.max - profile.min) / 64) ? "at_poc" :
     price > profile.poc ? "above_poc" : "below_poc";
@@ -232,7 +236,7 @@ export function buildFlow(st: BarStore, now: number, opts: {
   ] : ["No hay suficientes velas con tick volume para calcular el perfil sin inventar datos."];
   const validBars = profile?.bars || 0;
   return {
-    ok: !!profile, mode, scope, title, profile, levels, gaps, sweeps, price, pressure,
+    ok: !!profile, mode, scope, title, profile, levels, gaps, sweeps, price, pressure, suite, heatmap,
     vwap: profile?.vwap ?? null, direction, evidence,
     quality: { validBars, withVolume: Math.round(validBars * (profile?.coverage || 0)),
       coveragePct: Math.round((profile?.coverage || 0)*100), cutoff,

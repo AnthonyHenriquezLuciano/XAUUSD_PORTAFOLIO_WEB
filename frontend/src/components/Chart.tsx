@@ -3,6 +3,8 @@ import { createChart, CrosshairMode, IChartApi, IPriceLine, ISeriesApi, LineStyl
 import { ChartOverlay } from "../chart/overlay";
 import { captureViewport, restoreViewport } from "../chart/viewport";
 import { historyChange, mergeCurrentTick, type ChartBar } from "../chart/historySync";
+import {cacheGet,cachePut,cacheKey,mergePages,HISTORICAL_PAGE_SIZE,INITIAL_SIZE} from "../chart/historyCache";
+import {readWorkspaces,writeWorkspace,removeWorkspace,readViewport,writeViewport,type VisualWorkspace} from "../chart/workspaces";
 import { chartSessionWindows } from "../sessions/marketSessions";
 import DrawingTools from "./DrawingTools";
 import { Icon, Logo } from "../icons";
@@ -33,8 +35,8 @@ export default function Chart() {
   const [barLoad, setBarLoad] = useState<{ phase: "loading" | "ready" | "empty" | "error"; count: number; message?: string }>({ phase: "loading", count: 0 });
   const [reload, setReload] = useState(0);
   // Exploratory mode never jumps back to the last candle until the user requests it.
-  const followingRef = useRef(true);
-  const [following, setFollowing] = useState(true);
+  const followingRef = useRef(false);
+  const [following, setFollowing] = useState(false);
   const [drawOpen, setDrawOpen] = useState<boolean>(() => { try { return localStorage.getItem("xauai.drawopen") === "1"; } catch { return false; } });
   const linesRef = useRef<Map<string, { line: IPriceLine; def: LineDef }>>(new Map());
   const lastRef = useRef<{ time: number; open: number; high: number; low: number; close: number } | null>(null);
@@ -49,6 +51,14 @@ export default function Chart() {
   const connected = s.status === "conectado";
   const extraRef = useRef<number[]>([]);
   const loadedKeyRef = useRef("");
+  const viewKeyRef=useRef("");
+  const olderBusyRef=useRef(false);
+  const olderExhaustedRef=useRef(false);
+  const [olderBusy,setOlderBusy]=useState(false);
+  const [olderEnd,setOlderEnd]=useState(false);
+  const [savedWorkspaces,setSavedWorkspaces]=useState<VisualWorkspace[]>(readWorkspaces);
+  const [workspaceOpen,setWorkspaceOpen]=useState(false);
+  const [historySource,setHistorySource]=useState<"cache"|"live"|"paged">("live");
   const stateRef = useRef({ s, ui });
   stateRef.current = { s, ui };
 
@@ -61,7 +71,7 @@ export default function Chart() {
       crosshair: { mode: CrosshairMode.Normal },
       rightPriceScale: { borderColor: "#262e3f", scaleMargins: { top: 0.08, bottom: 0.08 } },
       timeScale: { borderColor: "#262e3f", timeVisible: true, secondsVisible: false, rightOffset: 12,
-        lockVisibleTimeRangeOnResize: true, shiftVisibleRangeOnNewBar: true },
+        lockVisibleTimeRangeOnResize: true, shiftVisibleRangeOnNewBar: false, fixLeftEdge:false },
       kineticScroll: {mouse:true,touch:true},
       // Size is controlled explicitly by ResizeObserver so a previously collapsed
       // grid track cannot leave the chart with a permanent 0px canvas.
@@ -124,18 +134,25 @@ export default function Chart() {
     // previous candle. Pointer movement / wheel / touch switches to exploration.
     // A plain click does not pause live tracking.
     let down: {x:number;y:number;pointerId:number}|null=null;
+    let dragged=false;
+    const persistView=()=>{
+      const scale=chart.timeScale(),range=scale.getVisibleRange();
+      if(viewKeyRef.current&&range&&typeof range.from==="number"&&typeof range.to==="number"){
+        writeViewport(viewKeyRef.current,{from:Number(range.from),to:Number(range.to)});
+      }
+    };
     const explore=()=>{
       if(!followingRef.current)return;
       followingRef.current=false;setFollowing(false);
       chart.timeScale().applyOptions({shiftVisibleRangeOnNewBar:false});
     };
-    const pointerDown=(e:PointerEvent)=>{down={x:e.clientX,y:e.clientY,pointerId:e.pointerId};};
+    const pointerDown=(e:PointerEvent)=>{dragged=false;down={x:e.clientX,y:e.clientY,pointerId:e.pointerId};};
     const pointerMove=(e:PointerEvent)=>{
       if(!down||e.pointerId!==down.pointerId)return;
-      if(Math.hypot(e.clientX-down.x,e.clientY-down.y)>5){explore();down=null;}
+      if(Math.hypot(e.clientX-down.x,e.clientY-down.y)>5){dragged=true;explore();down=null;}
     };
-    const pointerUp=()=>{down=null;};
-    const wheel=()=>explore();
+    const pointerUp=()=>{if(dragged)persistView();down=null;dragged=false;};
+    const wheel=()=>{explore();window.setTimeout(persistView,450);};
     host?.addEventListener("pointerdown",pointerDown,{passive:true});
     host?.addEventListener("pointermove",pointerMove,{passive:true});
     host?.addEventListener("pointerup",pointerUp,{passive:true});
@@ -156,48 +173,45 @@ export default function Chart() {
     };
   }, []);
 
-  // New account or timeframe is a deliberate context change, not a market update.
+  // Exploration is ALWAYS the default. Changing timeframe never grants
+  // automatic scrolling back to the latest candles.
   useEffect(()=>{
-    followingRef.current=true;setFollowing(true);
-    chartRef.current?.timeScale().applyOptions({shiftVisibleRangeOnNewBar:true});
+    followingRef.current=false;setFollowing(false);
+    chartRef.current?.timeScale().applyOptions({shiftVisibleRangeOnNewBar:false});
+    olderExhaustedRef.current=false;setOlderEnd(false);
   },[tf,s.broker,s.accountInfo?.id]);
 
   // ------------------------------------------------------------------ datos
   useEffect(() => {
-    try { localStorage.setItem("xauai.tf", tf); } catch { /* sin almacenamiento */ }
-    if (!connected || !candleRef.current) {
-      setBarLoad({phase:"loading",count:0});loadedKeyRef.current="";
-      return;
+    try{localStorage.setItem("xauai.tf",tf);}catch{/*optional*/}
+    if(!connected||!candleRef.current){
+      loadedKeyRef.current="";setBarLoad({phase:"loading",count:0});return;
     }
-    let cancel = false;
+    let cancelled=false;
     const datasetKey=[s.broker,s.accountInfo?.id||"sim",tf].join(":");
-    const reset=loadedKeyRef.current!==datasetKey;
-    if(reset)setBarLoad({phase:"loading",count:0});
-    api(`/api/bars?tf=${tf}&limit=3000`).then((d) => {
-      if (cancel || !candleRef.current) return;
-      if (!Array.isArray(d?.bars)) throw new Error("La respuesta del histórico no contiene velas.");
-      const bars: Array<{time: UTCTimestamp;open:number;high:number;low:number;close:number;volume:number}> = d.bars.map((b: any) => ({
-        time: Number(b.time) as UTCTimestamp,
-        open: Number(b.open), high: Number(b.high),
-        low: Number(b.low), close: Number(b.close), volume: Number(b.volume || 0),
-      }));
-      if (bars.some((b: any, i: number) =>
-        !Number.isFinite(Number(b.time)) || ![b.open,b.high,b.low,b.close].every(Number.isFinite)
-        || b.low > b.high || b.high < Math.max(b.open,b.close) || b.low > Math.min(b.open,b.close)
-        || (i > 0 && Number(b.time) <= Number(bars[i-1].time))
-      )) throw new Error("El histórico contiene velas inválidas o tiempos duplicados. Revisa los datos M1.");
-      const chart=chartRef.current;
-      // Merge the active tick only into its own M1/M5/... bucket, so a stale
-      // historical response cannot rewind the currently forming candle.
+    const key=cacheKey(s.broker+":"+(s.accountInfo?.id||"sim"),tf);
+    const firstLoad=loadedKeyRef.current!==datasetKey;
+    viewKeyRef.current=key;
+    const normalize=(input:any[]):ChartBar[]=>input.map(b=>({
+      time:Number(b.time),open:Number(b.open),high:Number(b.high),
+      low:Number(b.low),close:Number(b.close),volume:Number(b.volume||0),
+    }));
+    const ingest=(input:ChartBar[],cached:boolean)=>{
+      if(cancelled||!candleRef.current||!chartRef.current||loadedKeyRef.current && loadedKeyRef.current!==datasetKey && !firstLoad)return;
+      if(input.some((b,i)=>!Number.isFinite(b.time)||![b.open,b.high,b.low,b.close,b.volume].every(Number.isFinite)
+        ||b.low>b.high||b.high<Math.max(b.open,b.close)||b.low>Math.min(b.open,b.close)
+        ||i>0&&b.time<=input[i-1].time))throw new Error("Histórico OHLC inválido o desordenado.");
+      const reset=loadedKeyRef.current!==datasetKey;
+      const oldBars=reset?[]:barsRef.current;
+      const bars=reset?input:mergePages(oldBars,input);
       if(!reset)mergeCurrentTick(bars,lastRef.current as ChartBar|null,stateRef.current.s.tick?.time,TF_SEC[tf]);
-      const oldLatest=barsRef.current.length?Number(barsRef.current[barsRef.current.length-1].time):null;
-      const change=reset?{kind:"replace" as const,updates:bars}:historyChange(barsRef.current as ChartBar[],bars);
+      const change=reset?{kind:"replace" as const,updates:bars}:historyChange(oldBars,bars);
       if(change.kind!=="unchanged"){
-        const previous=change.kind==="replace"&&!reset&&chart
-          ?captureViewport(chart,barsRef.current.length,followingRef.current):null;
+        const chart=chartRef.current;
+        const previous=!reset&&change.kind==="replace"?captureViewport(chart,oldBars.length,followingRef.current):null;
         if(change.kind==="replace"){
-          candleRef.current.setData(bars);
-          volumeRef.current?.setData(bars.map(b=>({time:b.time,value:b.volume,
+          candleRef.current.setData(bars.map(b=>({...b,time:b.time as UTCTimestamp})));
+          volumeRef.current?.setData(bars.map(b=>({time:b.time as UTCTimestamp,value:b.volume,
             color:b.close>=b.open?"rgba(65,174,136,.45)":"rgba(213,96,100,.45)"})));
         }else{
           for(const b of change.updates){
@@ -206,26 +220,99 @@ export default function Chart() {
               color:b.close>=b.open?"rgba(65,174,136,.45)":"rgba(213,96,100,.45)"});
           }
         }
-        timesRef.current=bars.map(b=>Number(b.time));
         barsRef.current=bars;
+        timesRef.current=bars.map(b=>b.time);
         lastRef.current=bars.length?{...bars[bars.length-1]}:null;
-        if(chart&&bars.length){
-          if(change.kind==="replace")restoreViewport(chart,previous,bars.length,reset);
-          else if(followingRef.current&&oldLatest!=null&&bars[bars.length-1].time>oldLatest)
+        if(bars.length){
+          if(reset){
+            const saved=readViewport(key);
+            if(saved){
+              try{chart.timeScale().setVisibleRange({from:saved.from as UTCTimestamp,to:saved.to as UTCTimestamp});}
+              catch{restoreViewport(chart,null,bars.length,true);}
+            }else restoreViewport(chart,null,bars.length,true);
+          }else if(change.kind==="replace")restoreViewport(chart,previous,bars.length,false);
+          // Incremental candles NEVER change the manual viewport.
+          else if(followingRef.current&&oldBars.length&&bars[bars.length-1].time>oldBars[oldBars.length-1].time)
             chart.timeScale().scrollToRealTime();
         }
       }
       loadedKeyRef.current=datasetKey;
-      // Avoid rerendering all panels when the server returns identical data.
+      if(bars.length)cachePut(key,bars);
       setBarLoad(v=>v.phase===(bars.length?"ready":"empty")&&v.count===bars.length?v:
         {phase:bars.length?"ready":"empty",count:bars.length});
-    }).catch((e) => {
-      if (cancel) return;
-      setBarLoad({phase:"error",count:0,message:e?.message || "No se pudo cargar el histórico."});
-      toast(e?.message || "Error al cargar las velas del gráfico", "error");
+      if(cached)setHistorySource("cache");else setHistorySource("live");
+    };
+    if(firstLoad){
+      olderExhaustedRef.current=false;setOlderEnd(false);
+      const fromCache=cacheGet(key);
+      if(fromCache?.length){try{ingest(fromCache,true);}catch{/*cache optional*/}}
+      else{
+        // Never show candles belonging to another account during a new login.
+        candleRef.current?.setData([]);volumeRef.current?.setData([]);
+        barsRef.current=[];timesRef.current=[];lastRef.current=null;
+        setBarLoad({phase:"loading",count:0});
+      }
+    }
+    api(`/api/bars?tf=${tf}&limit=${INITIAL_SIZE}`).then(d=>{
+      if(cancelled)return;
+      if(!Array.isArray(d?.bars))throw new Error("La respuesta del histórico no contiene velas.");
+      ingest(normalize(d.bars),false);
+    }).catch((e:any)=>{
+      if(cancelled)return;
+      if(!barsRef.current.length||loadedKeyRef.current!==datasetKey)
+        setBarLoad({phase:"error",count:0,message:e?.message||"Histórico no disponible."});
+      toast(e?.message||"Error al sincronizar velas","error");
     });
-    return () => { cancel = true; };
-  }, [tf, connected, s.broker, s.accountInfo?.id, s.barsVersion, reload]);
+    return ()=>{cancelled=true;};
+  },[tf,connected,s.broker,s.accountInfo?.id,s.barsVersion,reload]);
+
+  // ------------------------------------------------------------------ histórico progresivo
+  useEffect(()=>{
+    const chart=chartRef.current;
+    if(!ready||!connected||!chart)return;
+    const key=[s.broker,s.accountInfo?.id||"sim",tf].join(":");
+    let cancelled=false,timeout=0;
+    const loadOlder=async()=>{
+      if(cancelled||olderBusyRef.current||olderExhaustedRef.current||!barsRef.current.length
+        ||loadedKeyRef.current!==key)return;
+      olderBusyRef.current=true;setOlderBusy(true);
+      const before=barsRef.current[0].time;
+      try{
+        const d=await api(`/api/bars?tf=${tf}&before=${before}&limit=${HISTORICAL_PAGE_SIZE}`);
+        if(cancelled||loadedKeyRef.current!==key)return;
+        if(!Array.isArray(d?.bars))throw new Error("Página histórica inválida");
+        const older:ChartBar[]=d.bars.map((b:any)=>({time:Number(b.time),open:Number(b.open),
+          high:Number(b.high),low:Number(b.low),close:Number(b.close),volume:Number(b.volume||0)}))
+          .filter((b:ChartBar)=>Number.isFinite(b.time)&&b.time<before&&Number.isFinite(b.close));
+        if(!older.length){olderExhaustedRef.current=true;setOlderEnd(true);return;}
+        const prev=captureViewport(chart,barsRef.current.length,false);
+        const combined=mergePages(older,barsRef.current);
+        if(combined.length===barsRef.current.length){olderExhaustedRef.current=true;setOlderEnd(true);return;}
+        candleRef.current?.setData(combined.map(b=>({...b,time:b.time as UTCTimestamp})));
+        volumeRef.current?.setData(combined.map(b=>({time:b.time as UTCTimestamp,value:b.volume,
+          color:b.close>=b.open?"rgba(65,174,136,.45)":"rgba(213,96,100,.45)"})));
+        barsRef.current=combined;timesRef.current=combined.map(b=>b.time);
+        restoreViewport(chart,prev,combined.length,false);
+        cachePut(cacheKey(s.broker+":"+(s.accountInfo?.id||"sim"),tf),combined);
+        setHistorySource("paged");
+        setBarLoad(v=>({...v,count:combined.length,phase:"ready"}));
+      }catch(e:any){if(!cancelled)toast(e?.message||"Sin más datos históricos","error");}
+      finally{olderBusyRef.current=false;if(!cancelled)setOlderBusy(false);}
+    };
+    const onVisible=(range:{from:number;to:number}|null)=>{
+      if(!range||!barsRef.current.length||followingRef.current||olderBusyRef.current||olderExhaustedRef.current)return;
+      if(range.from<100){
+        if(timeout)window.clearTimeout(timeout);
+        timeout=window.setTimeout(()=>{void loadOlder();},350);
+      }
+    };
+    chart.timeScale().subscribeVisibleLogicalRangeChange(onVisible);
+    return ()=>{
+      cancelled=true;if(timeout)window.clearTimeout(timeout);
+      chart.timeScale().unsubscribeVisibleLogicalRangeChange(onVisible);
+      olderBusyRef.current=false;
+    };
+  },[ready,connected,tf,s.broker,s.accountInfo?.id]);
 
   // ticks -> última vela
   useEffect(() => {
@@ -371,7 +458,7 @@ export default function Chart() {
     ov.setData({
       tf: TF_SEC[tf], times: () => timesRef.current, nowT: last, atr: s.signals?.atr, theme: th,
       flow: s.flow, flowFocus: ui.tab === "flujo" ? ui.flow.focus : "all",
-      flowLayers: {profile:ui.layers.flujo !== false, fvg:ui.layers.fvg !== false},
+      flowLayers: {profile:ui.layers.flujo !== false, fvg:ui.layers.fvg !== false,heatmap:ui.layers.heatmap!==false},
       layers: { rangos: !!ui.layers.rangos && structure, sesionesReales: ui.layers.sesionesReales !== false && !focused,
         niveles: !!ui.layers.niveles && structure, estrategias: !!ui.layers.estrategias && !focused,
         operaciones: !!ui.layers.operaciones && !focused, rr: ui.chart.rr && !focused },
@@ -502,6 +589,26 @@ export default function Chart() {
   }, [contract]);
 
   // ------------------------------------------------------------------ interfaz
+  const saveCurrentWorkspace=()=>{
+    const name=window.prompt("Nombre del espacio de trabajo (máximo 32 caracteres):",tf+" · "+(ui.tab==="flujo"?"Order Flow":"Trading"))?.trim().slice(0,32);
+    if(!name)return;
+    const ws:VisualWorkspace={id:name.toLowerCase().replace(/\s+/g,"-"),
+      name,tf,theme:ui.chart.theme,candles:ui.chart.candles,grid:ui.chart.grid,rr:ui.chart.rr,layers:{...ui.layers},
+      flow:{mode:ui.flow.mode,scope:ui.flow.scope,focus:ui.flow.focus,bins:ui.flow.bins},
+      forecast:ui.showForecast,createdAt:Date.now()};
+    setSavedWorkspaces(writeWorkspace(ws));setWorkspaceOpen(false);
+    toast("Espacio visual guardado: "+name,"ok");
+  };
+  const loadWorkspace=(ws:VisualWorkspace)=>{
+    followingRef.current=false;setFollowing(false);
+    if(ws.tf in TF_SEC)setTf(ws.tf);
+    ui.setChart({theme:ws.theme,...(ws.candles?{candles:ws.candles}:{}),...(typeof ws.grid==="boolean"?{grid:ws.grid}:{}),...(typeof ws.rr==="boolean"?{rr:ws.rr}:{})});
+    for(const [key,value] of Object.entries(ws.layers))if(typeof value==="boolean")ui.setLayer(key,value);
+    ui.setFlow({mode:ws.flow.mode as any,scope:ws.flow.scope as any,
+      focus:ws.flow.focus as any,bins:Number(ws.flow.bins)||64});
+    ui.setShowForecast(ws.forecast);
+    setWorkspaceOpen(false);
+  };
   const fc = s.signals?.forecast;
   const p4 = fc?.points?.find((p: any) => p.h === 4);
   return (
@@ -525,24 +632,54 @@ export default function Chart() {
       </div>
       <div className="toolbar">
         <div className="seg">
-          {Object.keys(TF_SEC).map((k) => <button key={k} className={tf === k ? "on" : ""} onClick={() => setTf(k)}>{k}</button>)}
+          {Object.keys(TF_SEC).map((k) => <button key={k} className={tf === k ? "on" : ""} onClick={()=>{
+            const range=chartRef.current?.timeScale().getVisibleRange();
+            if(range&&viewKeyRef.current&&typeof range.from==="number"&&typeof range.to==="number")
+              writeViewport(viewKeyRef.current,{from:Number(range.from),to:Number(range.to)});
+            setTf(k);
+          }}>{k}</button>)}
         </div>
         <div className="layers-wrap">
           <button className={`btn sm ${layersOpen ? "on" : ""}`} onClick={() => setLayersOpen(!layersOpen)} aria-expanded={layersOpen}>Capas <Icon name="chevron" size={13} /></button>
           {layersOpen ? (
             <div className="layers-menu" onMouseLeave={() => setLayersOpen(false)}>
-              {([["volumen", "Actividad de ticks (histograma por vela)", "#72af94"], ["rangos", "Rangos del EA (ALB/TOK/AORB)", th.zone.asia], ["sesionesReales", "Sesiones reales (Tokio/Londres/NY)", "#d8ad61"], ["flujo", "Perfil de volumen y POC", "#e5bf7c"], ["fvg", "Ineficiencias FVG", "#16b07a"], ["niveles", "Niveles clave", th.level.pd], ["estrategias", "Órdenes de las estrategias", th.buy], ["operaciones", "Operaciones (entrada → salida)", th.win], ["noticias", "Noticias USD", th.sl]] as [string, string, string][]).map(([k, l, c]) => (
+              {([["heatmap","Mapa de confluencias (NO order book)","#dfb976"],["volumen", "Actividad de ticks (histograma por vela)", "#72af94"], ["rangos", "Rangos del EA (ALB/TOK/AORB)", th.zone.asia], ["sesionesReales", "Sesiones reales (Tokio/Londres/NY)", "#d8ad61"], ["flujo", "Perfil de volumen y POC", "#e5bf7c"], ["fvg", "Ineficiencias FVG", "#16b07a"], ["niveles", "Niveles clave", th.level.pd], ["estrategias", "Órdenes de las estrategias", th.buy], ["operaciones", "Operaciones (entrada → salida)", th.win], ["noticias", "Noticias USD", th.sl]] as [string, string, string][]).map(([k, l, c]) => (
                 <label key={k} className="layer-item"><input type="checkbox" checked={ui.layers[k] !== false} onChange={(e) => ui.setLayer(k, e.target.checked)} /><i style={{ background: c }} />{l}</label>
               ))}
               <label className="layer-item"><input type="checkbox" checked={ui.chart.rr} onChange={(e) => ui.setChart({ rr: e.target.checked })} /><i style={{ background: th.tp }} />Zonas de riesgo / beneficio</label>
             </div>
           ) : null}
         </div>
+        <div className="layers-wrap">
+          <button className="btn sm" onClick={()=>setWorkspaceOpen(v=>!v)} aria-expanded={workspaceOpen} title="Guardar y recuperar configuraciones visuales">
+            <Icon name="portfolio" size={13}/> Espacios
+          </button>
+          {workspaceOpen&&<div className="layers-menu chart-workspace-menu">
+            <button className="btn sm" onClick={saveCurrentWorkspace}>Guardar vista actual</button>
+            {savedWorkspaces.map(ws=><div className="chart-workspace-item" key={ws.id}>
+              <button onClick={()=>loadWorkspace(ws)}>{ws.name} · {ws.tf}</button>
+              <button title={"Eliminar "+ws.name} aria-label={"Eliminar "+ws.name}
+                onClick={()=>setSavedWorkspaces(removeWorkspace(ws.id))}><Icon name="close" size={13}/></button>
+            </div>)}
+            {!savedWorkspaces.length&&<span className="premium-note">Todavía no guardaste ningún espacio.</span>}
+          </div>}
+        </div>
         <button className="btn sm" title="Perfil de volumen, POC, VWAP y FVG" onClick={() => ui.setTab("flujo")}>Order Flow</button>
         <button className="btn sm" title="Horarios de Tokio, Londres y Nueva York" onClick={() => ui.setTab("sesiones")}>Sesiones</button>
         <button className={`btn sm ${drawOpen ? "on" : ""}`} title="Herramientas de dibujo" aria-pressed={drawOpen}
           onClick={() => { const v = !drawOpen; setDrawOpen(v); try { localStorage.setItem("xauai.drawopen", v ? "1" : "0"); } catch { /* sin almacenamiento */ } }}><Icon name="edit" size={14} />Dibujo</button>
         <div className="spacer" />
+        <span className="terminal-history-source" title="Historial paginado; los datos históricos adicionales dependen de lo disponible en MT5">{olderBusy?"Cargando…":historySource==="cache"?"Caché local":historySource==="paged"?"Histórico ampliado":"MT5"}</span>
+        <button className="btn sm" disabled={!connected||olderBusy||olderEnd||!barsRef.current.length}
+          title="Solicitar velas anteriores y conservar tu ubicación actual" onClick={()=>{
+            const chart=chartRef.current;if(!chart)return;
+            const r=chart.timeScale().getVisibleLogicalRange();
+            if(!r)return;
+            followingRef.current=false;setFollowing(false);
+            chart.timeScale().setVisibleLogicalRange({from:Math.min(0,Number(r.from)),to:Math.min(0,Number(r.from))+(Number(r.to)-Number(r.from))});
+          }}>
+          <Icon name="clock" size={13}/> Historial
+        </button>
         <span className={`chart-navigation-state ${following?"live":"exploring"}`}
           role="status" aria-live="polite" title={following?"El gráfico sigue las nuevas velas":"Exploración manual: las actualizaciones no cambian tu posición"}>
           <span className="chart-navigation-dot" />{following?"En vivo":"Explorando"}

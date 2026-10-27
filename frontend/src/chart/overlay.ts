@@ -10,7 +10,7 @@ export type OverlayData = {
   times: () => number[];
   flow?: FlowResponse | null;
   flowFocus?: "all" | "volume" | "inefficiency" | "structure";
-  flowLayers?: { profile: boolean; fvg: boolean };
+  flowLayers?: { profile: boolean; fvg: boolean; heatmap?:boolean };
   nowT: number;
   atr?: number;
   theme: ChartTheme;
@@ -122,6 +122,26 @@ export class ChartOverlay implements ISeriesPrimitive<Time> {
           ctx.fillStyle = alpha("#c49b59", .05);
           ctx.fillRect(left, Math.min(vah,val), Math.max(1,right-left), Math.abs(val-vah));
         }
+      }
+    }
+    // Liquidity here means *confluence of inferred price references*, NOT
+    // order-book liquidity or large resting limit orders. Render at low opacity.
+    if(d.flowLayers?.heatmap && d.flowFocus!=="inefficiency"){
+      for(const zone of (d.flow?.heatmap||[]).slice(0,8)){
+        const upper=this.y(zone.hi),lower=this.y(zone.lo);
+        if(upper==null||lower==null)continue;
+        const y=Math.max(0,Math.min(upper,lower)),bottom=Math.min(_H,Math.max(upper,lower));
+        if(bottom<=0||y>=_H||bottom<=y)continue;
+        const isStrong=zone.sourceCount>=3;
+        ctx.fillStyle=alpha(isStrong?"#d8ad71":"#7e9aad",isStrong?.105:.06);
+        ctx.fillRect(0,y,W,Math.max(2,bottom-y));
+        ctx.strokeStyle=alpha(isStrong?"#d8ad71":"#7e9aad",isStrong?.33:.21);
+        ctx.lineWidth=1;ctx.setLineDash([2,8]);
+        ctx.beginPath();ctx.moveTo(0,y+.5);ctx.lineTo(W,y+.5);ctx.stroke();ctx.setLineDash([]);
+        ctx.font="600 10px system-ui";
+        ctx.fillStyle=alpha(isStrong?"#eac795":"#afc6d7",.86);
+        ctx.textAlign="left";ctx.textBaseline="top";
+        ctx.fillText("Confluencia · "+zone.sourceCount+" fuentes",10,y+4);
       }
     }
     if (d.flowLayers?.fvg && d.flowFocus !== "volume" && d.flowFocus !== "structure") {
