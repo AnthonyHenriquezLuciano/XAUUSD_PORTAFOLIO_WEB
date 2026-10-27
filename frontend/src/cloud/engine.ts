@@ -512,9 +512,26 @@ export async function createCloud(accountId: string): Promise<Backend> {
       case "GET /api/news": return { news, offset: srvOffset() };
       case "GET /api/bars": {
         if (!store) fail("Cargando velas…");
-        const m = TFM[qs.get("tf") || "M5"] || 5;
-        const lim = Number(qs.get("limit") || 3000);
-        return { tf: qs.get("tf"), bars: store!.tf(m).slice(-lim) };
+        const requested=qs.get("tf")||"M5";
+        if(!(requested in TFM))fail("Temporalidad no admitida");
+        const m=TFM[requested],lim=Math.min(1500,Math.max(50,Math.floor(Number(qs.get("limit")||900))));
+        if(!Number.isFinite(lim))fail("Límite de velas inválido");
+        const before=qs.has("before")?Number(qs.get("before")):null;
+        if(before!==null && (!Number.isFinite(before)||before<=0))fail("Fecha histórica inválida");
+        if(before===null)return {tf:requested,bars:store.tf(m).slice(-lim),origin:"live"};
+        const local=store.tf(m).filter(b=>b.time<before).slice(-lim);
+        // If the in-memory 30-day window already contains the full page,
+        // avoid another Supabase request. Otherwise, read only a bounded page
+        // through the existing account-scoped RLS RPC (never expose service keys).
+        if(local.length>=lim||store.ts[0]<before-Math.min(7*86400,Math.max(m*60*lim*1.2,86400)))
+          return {tf:requested,bars:local,origin:"memory"};
+        const span=Math.min(7*86400,Math.max(m*60*lim*1.3,86400));
+        const from=Math.max(1,Math.floor(before-span));
+        const raw=await rpc("get_bars",{acc:accountId,p_from:from,p_to:Math.floor(before-1)}) as RawBars;
+        if(!raw?.ts?.length)return {tf:requested,bars:local,origin:"remote",exhausted:true};
+        const historic=new BarStore(raw,shift(),14);
+        const older=historic.tf(m).filter(b=>b.time<before).slice(-lim);
+        return {tf:requested,bars:older,origin:"remote",exhausted:older.length===0};
       }
       case "GET /api/data_quality": {
         if (!store) throw new Error("Aún no hay historial M1 sincronizado.");
