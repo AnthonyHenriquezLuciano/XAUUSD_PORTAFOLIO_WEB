@@ -290,12 +290,21 @@ export default function Chart() {
     const fc = s.signals?.forecast;
     const [lo, md, hi] = fcRef.current;
     if (!lo) return;
-    if (!ui.showForecast || !fc?.points?.length) { lo.setData([]); md.setData([]); hi.setData([]); return; }
+    // Auxiliary forecast lines can also alter Lightweight Charts' time scale.
+    // Restore the user's manual historical view after reloading those series.
+    const chart=chartRef.current;
+    const snapshot=chart&&!followingRef.current
+      ?captureViewport(chart,barsRef.current.length,false):null;
+    const keepView=()=>{if(chart&&snapshot)restoreViewport(chart,snapshot,barsRef.current.length,false);};
+    if (!ui.showForecast || !fc?.points?.length) {
+      lo.setData([]);md.setData([]);hi.setData([]);keepView();return;
+    }
     const last = lastRef.current?.time ?? fc.points[0].t;
     const pts = fc.points.map((p: any, i: number) => ({ ...p, t: i === 0 ? last : last + p.h * 3600 }));
     lo.setData(pts.map((p: any) => ({ time: p.t as UTCTimestamp, value: p.p10 })));
     md.setData(pts.map((p: any) => ({ time: p.t as UTCTimestamp, value: p.p50 })));
     hi.setData(pts.map((p: any) => ({ time: p.t as UTCTimestamp, value: p.p90 })));
+    keepView();
   }, [ui.showForecast, s.signals?.forecast, tf]);
 
   // ------------------------------------------------------------------ líneas de precio
