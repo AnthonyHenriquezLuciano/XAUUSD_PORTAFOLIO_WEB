@@ -1,0 +1,22 @@
+import assert from "node:assert/strict";
+import {build} from "esbuild";
+const b=await build({entryPoints:["src/premium/portfolioGuardian.ts"],bundle:true,format:"esm",platform:"node",write:false,logLevel:"silent"});
+const {guardianFindings}=await import("data:text/javascript;base64,"+Buffer.from(b.outputFiles[0].text).toString("base64"));
+const a={id:"a",name:"Funded 5k",connected:false,unknown:true,unprotected:1,blocked:"daily limit",
+ dailyBuffer:50,equity:4700,stopRisk:140,positions:1};
+const exposures=[{symbol:"XAUUSD",accountCount:2,positionCount:2,missingData:0}];
+const pairs=[{a:"AORB",b:"TOK",r:.89,sharedActiveDays:30}];
+const perf=[{trades:10}];
+const out=guardianFindings([a],exposures,pairs,perf);
+assert.ok(out.some(x=>x.id==="stop:a"&&x.severity==="critical"));
+assert.ok(out.some(x=>x.id==="stale:a"&&x.source==="incomplete"));
+assert.ok(out.some(x=>x.id==="guard:a"));
+assert.ok(out.some(x=>x.id==="cluster:XAUUSD"));
+assert.ok(out.some(x=>x.id==="corr:AORB:TOK"));
+assert.ok(out.some(x=>x.id==="sample"));
+assert.ok(out.every(x=>x.heading&&x.evidence&&x.action&&x.source));
+assert.equal(out[0].severity,"critical");
+const safe={...a,connected:true,unknown:false,unprotected:0,blocked:null,dailyBuffer:200,stopRisk:10};
+assert.equal(guardianFindings([safe],[],[],[{trades:90}]).length,0,"no fabricated critical findings");
+assert.ok(guardianFindings([],[],[],[]).some(x=>x.id==="empty"));
+console.log("✓ Guardian: deterministic source-proven alerts; no AI probabilities or execution controls");
