@@ -90,10 +90,20 @@ export default function Chart() {
     const ov = new ChartOverlay();
     candle.attachPrimitive(ov);
     overlayRef.current = ov;
+    // One React hover render at most per animation frame. The chart crosshair
+    // itself stays native and responsive at the pointer's full refresh rate.
+    let hoverFrame=0;
+    let lastHoverTime:number|null=null;
     chart.subscribeCrosshairMove((p: any) => {
       const d = p?.seriesData?.get(candle);
-      if (!d || d.open == null) { setHover(null); return; }
-      setHover({ o: d.open, h: d.high, l: d.low, c: d.close, t: Number(p.time) });
+      const t=d?.open!=null?Number(p.time):null;
+      if(lastHoverTime===t)return;
+      lastHoverTime=t;
+      if(hoverFrame)cancelAnimationFrame(hoverFrame);
+      hoverFrame=requestAnimationFrame(()=>{
+        hoverFrame=0;
+        setHover(t==null?null:{o:d.open,h:d.high,l:d.low,c:d.close,t});
+      });
     });
     const mk = (color: string, style: LineStyle, width: 1 | 2) => chart.addLineSeries({ color, lineStyle: style, lineWidth: width, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
     fcRef.current = [mk("rgba(224,176,79,.7)", LineStyle.Solid, 1), mk("rgba(243,205,122,.95)", LineStyle.Dashed, 2), mk("rgba(224,176,79,.7)", LineStyle.Solid, 1)];
@@ -140,6 +150,7 @@ export default function Chart() {
       host?.removeEventListener("pointercancel",pointerUp);
       host?.removeEventListener("wheel",wheel);
       if (pendingFrame) cancelAnimationFrame(pendingFrame);
+      if (hoverFrame) cancelAnimationFrame(hoverFrame);
       chart.remove(); chartRef.current = null; candleRef.current = null; volumeRef.current = null;
       linesRef.current.clear();
     };
@@ -178,7 +189,8 @@ export default function Chart() {
       const chart=chartRef.current;
       // Merge the active tick only into its own M1/M5/... bucket, so a stale
       // historical response cannot rewind the currently forming candle.
-      if(!reset)mergeCurrentTick(bars,lastRef.current as ChartBar|null,s.tick?.time,TF_SEC[tf]);
+      if(!reset)mergeCurrentTick(bars,lastRef.current as ChartBar|null,stateRef.current.s.tick?.time,TF_SEC[tf]);
+      const oldLatest=barsRef.current.length?Number(barsRef.current[barsRef.current.length-1].time):null;
       const change=reset?{kind:"replace" as const,updates:bars}:historyChange(barsRef.current as ChartBar[],bars);
       if(change.kind!=="unchanged"){
         const previous=change.kind==="replace"&&!reset&&chart
@@ -199,7 +211,7 @@ export default function Chart() {
         lastRef.current=bars.length?{...bars[bars.length-1]}:null;
         if(chart&&bars.length){
           if(change.kind==="replace")restoreViewport(chart,previous,bars.length,reset);
-          else if(followingRef.current&&change.updates.some(b=>b.time>Number(barsRef.current[barsRef.current.length-change.updates.length-1]?.time??-Infinity)))
+          else if(followingRef.current&&oldLatest!=null&&bars[bars.length-1].time>oldLatest)
             chart.timeScale().scrollToRealTime();
         }
       }
