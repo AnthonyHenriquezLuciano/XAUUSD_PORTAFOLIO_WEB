@@ -7,6 +7,7 @@ import LoadingState from "../components/LoadingState";
 import {summarizeAccount,portfolioTotals,type OwnedAccount,type LiveRow,type StateRow} from "../premium/portfolioRisk";
 import {exposureBySymbol,strategyDependence} from "../premium/portfolioDependence";
 import {portfolioBootstrap,scalingScenario} from "../premium/portfolioScenarios";
+import {guardianFindings} from "../premium/portfolioGuardian";
 import {byAccountPerformance,byStrategyPerformance,portfolioInsights,portfolioClosedCurve,
   type PortfolioTrade} from "../premium/portfolioAnalytics";
 type Entry={acc:OwnedAccount;live?:LiveRow;state?:StateRow};
@@ -38,7 +39,7 @@ export default function PortfolioCockpit(){
  const [loading,setLoading]=useState(true),[error,setError]=useState("");
  const [now,setNow]=useState(Date.now()),[reload,setReload]=useState(0);
  const [activeId,setActiveId]=useState("all");
- const [panel,setPanel]=useState<"overview"|"strategies"|"risk"|"dependence"|"laboratory"|"scaling">("overview");
+ const [panel,setPanel]=useState<"overview"|"strategies"|"risk"|"dependence"|"laboratory"|"scaling"|"guardian">("overview");
  const [scenario,setScenario]=useState({existing:5000,accounts25:2,accounts50:0,ratePct:5,splitPct:80,months:12});
  const [fee25,setFee25]=useState(""),[fee50,setFee50]=useState("");
  const [capped,setCapped]=useState(false);
@@ -87,6 +88,7 @@ export default function PortfolioCockpit(){
  const exposures=useMemo(()=>exposureBySymbol(filteredEntries),[filteredEntries,now]);
  const correlations=useMemo(()=>strategyDependence(visibleTrades),[visibleTrades]);
  const study=useMemo(()=>portfolioBootstrap(visibleTrades),[visibleTrades]);
+ const guardian=useMemo(()=>guardianFindings(visible,exposures,correlations,perf),[visible,exposures,correlations,perf]);
  const plan=useMemo(()=>scalingScenario({...scenario,
    fee25:fee25.trim()?Number(fee25):null,fee50:fee50.trim()?Number(fee50):null}),[scenario,fee25,fee50]);
  const nTrades=perf.reduce((a,b)=>a+b.trades,0),realized=perf.reduce((a,b)=>a+b.net,0);
@@ -101,7 +103,7 @@ export default function PortfolioCockpit(){
    {loading&&<LoadingState label="Cargando cartera y cierres registrados…"/>}
    <div className="pi-topbar">
      <div className="pi-tabs" role="tablist" aria-label="Secciones del portafolio">
-       {([["overview","Capital"],["strategies","Estrategias"],["risk","Riesgo"],["dependence","Dependencia"],["laboratory","Laboratorio"],["scaling","Escalamiento"] ] as const).map(([key,label])=>
+       {([["overview","Capital"],["strategies","Estrategias"],["risk","Riesgo"],["dependence","Dependencia"],["laboratory","Laboratorio"],["scaling","Escalamiento"],["guardian","Guardian"] ] as const).map(([key,label])=>
          <button key={key} role="tab" aria-selected={panel===key} className={panel===key?"on":""} onClick={()=>setPanel(key)}>{label}</button>)}
      </div>
      <label className="pi-account-filter">Cuenta
@@ -280,6 +282,22 @@ export default function PortfolioCockpit(){
      <p className="premium-note">{plan.reason}</p>
      <p className="premium-note">El capital nominal de fondeo no es dinero propio ni equivale a dinero disponible para retirar. La hipótesis mensual no está respaldada por un pronóstico y no contempla el riesgo de perder cuentas. *El resultado neto de precios de evaluación es N/D mientras no ingreses los precios correspondientes; tampoco incluye impuestos ni costes operativos.</p>
    </section>}
+   {panel==="guardian"&&<section className="portfolio-list">
+      <header className="pi-section-head"><div><span>PORTFOLIO GUARDIAN · SUPERVISIÓN</span>
+        <h2>Diagnóstico explicable del portafolio</h2></div>
+        <small>{guardian.length} hallazgo(s)</small></header>
+      <p className="premium-note">Motor preventivo basado en reglas verificables. No es una IA entrenada, no predice precios y no autoriza operaciones.</p>
+      {!guardian.length&&<div className="pi-alert info"><strong>Sin hallazgos con las reglas activas</strong>
+        <span>Esto no significa que el portafolio carezca de riesgo: la conexión, los límites y la ejecución deben comprobarse directamente en MT5.</span></div>}
+      {guardian.map(x=><article className={`pi-guardian-item ${x.severity}`} key={x.id}>
+        <div className="pi-guardian-heading"><strong>{x.heading}</strong>
+          <span>{x.severity==="critical"?"Crítico":x.severity==="warning"?"Atención":x.severity==="review"?"Revisar":"Información"}</span></div>
+        <div><b>Evidencia</b><p>{x.evidence}</p></div>
+        <div><b>Revisión recomendada</b><p>{x.action}</p></div>
+        <small>Origen: {x.source==="mt5_live"?"Telemetría MT5":x.source==="closed_trades"?"Operaciones cerradas":x.source==="derived"?"Cálculo derivado":"Datos incompletos"}</small>
+      </article>)}
+      <p className="premium-note">Los hallazgos se recalculan con el conjunto de cuentas visible; ninguna alarma constituye un comando ni cambia el lotaje, el copiador o la operación real.</p>
+    </section>}
    <section className="portfolio-list pi-disclaimer">
      <h2>Integridad financiera y alcance</h2>
      <p>Las cifras de posiciones y márgenes son estimaciones de la web; no sustituyen los límites del bróker ni de la firma. P&L histórico procede de cierres MT5 disponibles y puede omitir comisiones, swaps o movimientos no sincronizados.</p>
