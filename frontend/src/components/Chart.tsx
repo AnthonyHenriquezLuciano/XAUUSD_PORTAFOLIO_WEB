@@ -593,7 +593,7 @@ export default function Chart() {
     const name=window.prompt("Nombre del espacio de trabajo (máximo 32 caracteres):",tf+" · "+(ui.tab==="flujo"?"Order Flow":"Trading"))?.trim().slice(0,32);
     if(!name)return;
     const ws:VisualWorkspace={id:name.toLowerCase().replace(/\s+/g,"-"),
-      name,tf,theme:ui.chart.theme,layers:{...ui.layers},
+      name,tf,theme:ui.chart.theme,candles:ui.chart.candles,grid:ui.chart.grid,rr:ui.chart.rr,layers:{...ui.layers},
       flow:{mode:ui.flow.mode,scope:ui.flow.scope,focus:ui.flow.focus,bins:ui.flow.bins},
       forecast:ui.showForecast,createdAt:Date.now()};
     setSavedWorkspaces(writeWorkspace(ws));setWorkspaceOpen(false);
@@ -602,7 +602,7 @@ export default function Chart() {
   const loadWorkspace=(ws:VisualWorkspace)=>{
     followingRef.current=false;setFollowing(false);
     if(ws.tf in TF_SEC)setTf(ws.tf);
-    ui.setChart({theme:ws.theme});
+    ui.setChart({theme:ws.theme,...(ws.candles?{candles:ws.candles}:{}),...(typeof ws.grid==="boolean"?{grid:ws.grid}:{}),...(typeof ws.rr==="boolean"?{rr:ws.rr}:{})});
     for(const [key,value] of Object.entries(ws.layers))if(typeof value==="boolean")ui.setLayer(key,value);
     ui.setFlow({mode:ws.flow.mode as any,scope:ws.flow.scope as any,
       focus:ws.flow.focus as any,bins:Number(ws.flow.bins)||64});
