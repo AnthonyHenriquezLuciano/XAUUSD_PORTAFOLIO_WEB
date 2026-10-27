@@ -3,6 +3,7 @@
  */
 const STORAGE="xauai.workspaces.v4";
 export type VisualWorkspace={id:string;name:string;tf:string;theme:string;
+  candles?:"rellenas"|"huecas";grid?:boolean;rr?:boolean;
   layers:Record<string,boolean>;flow:{mode:string;scope:string;focus:string;bins:number};
   forecast:boolean;createdAt:number;};
 export function readWorkspaces():VisualWorkspace[]{
