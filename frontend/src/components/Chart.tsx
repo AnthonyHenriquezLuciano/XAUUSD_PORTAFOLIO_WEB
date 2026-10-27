@@ -647,14 +647,14 @@ export default function Chart() {
         </div>
         <div className="layers-wrap">
           <button className="btn sm" onClick={()=>setWorkspaceOpen(v=>!v)} aria-expanded={workspaceOpen} title="Guardar y recuperar configuraciones visuales">
-            <Icon name="layout-dashboard" size={13}/> Espacios
+            <Icon name="portfolio" size={13}/> Espacios
           </button>
           {workspaceOpen&&<div className="layers-menu chart-workspace-menu">
             <button className="btn sm" onClick={saveCurrentWorkspace}>Guardar vista actual</button>
             {savedWorkspaces.map(ws=><div className="chart-workspace-item" key={ws.id}>
               <button onClick={()=>loadWorkspace(ws)}>{ws.name} · {ws.tf}</button>
               <button title={"Eliminar "+ws.name} aria-label={"Eliminar "+ws.name}
-                onClick={()=>setSavedWorkspaces(removeWorkspace(ws.id))}><Icon name="x" size={13}/></button>
+                onClick={()=>setSavedWorkspaces(removeWorkspace(ws.id))}><Icon name="close" size={13}/></button>
             </div>)}
             {!savedWorkspaces.length&&<span className="premium-note">Todavía no guardaste ningún espacio.</span>}
           </div>}
@@ -673,7 +673,7 @@ export default function Chart() {
             followingRef.current=false;setFollowing(false);
             chart.timeScale().setVisibleLogicalRange({from:Math.min(0,Number(r.from)),to:Math.min(0,Number(r.from))+(Number(r.to)-Number(r.from))});
           }}>
-          <Icon name="chevron-left" size={13}/> Historial
+          <Icon name="clock" size={13}/> Historial
         </button>
         <span className={`chart-navigation-state ${following?"live":"exploring"}`}
           role="status" aria-live="polite" title={following?"El gráfico sigue las nuevas velas":"Exploración manual: las actualizaciones no cambian tu posición"}>
