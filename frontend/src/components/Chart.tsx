@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { createChart, CrosshairMode, IChartApi, IPriceLine, ISeriesApi, LineStyle, UTCTimestamp } from "lightweight-charts";
 import { ChartOverlay } from "../chart/overlay";
 import { captureViewport, restoreViewport } from "../chart/viewport";
+import { historyChange, mergeCurrentTick, type ChartBar } from "../chart/historySync";
 import { chartSessionWindows } from "../sessions/marketSessions";
 import DrawingTools from "./DrawingTools";
 import { Icon, Logo } from "../icons";
@@ -31,6 +32,9 @@ export default function Chart() {
   const [ready, setReady] = useState(false);
   const [barLoad, setBarLoad] = useState<{ phase: "loading" | "ready" | "empty" | "error"; count: number; message?: string }>({ phase: "loading", count: 0 });
   const [reload, setReload] = useState(0);
+  // Exploratory mode never jumps back to the last candle until the user requests it.
+  const followingRef = useRef(true);
+  const [following, setFollowing] = useState(true);
   const [drawOpen, setDrawOpen] = useState<boolean>(() => { try { return localStorage.getItem("xauai.drawopen") === "1"; } catch { return false; } });
   const linesRef = useRef<Map<string, { line: IPriceLine; def: LineDef }>>(new Map());
   const lastRef = useRef<{ time: number; open: number; high: number; low: number; close: number } | null>(null);
@@ -56,7 +60,9 @@ export default function Chart() {
       grid: { vertLines: { color: "#161c27" }, horzLines: { color: "#161c27" } },
       crosshair: { mode: CrosshairMode.Normal },
       rightPriceScale: { borderColor: "#262e3f", scaleMargins: { top: 0.08, bottom: 0.08 } },
-      timeScale: { borderColor: "#262e3f", timeVisible: true, secondsVisible: false, rightOffset: 12 },
+      timeScale: { borderColor: "#262e3f", timeVisible: true, secondsVisible: false, rightOffset: 12,
+        shiftVisibleRangeOnNewBar: true },
+      kineticScroll: {mouse:true,touch:true},
       // Size is controlled explicitly by ResizeObserver so a previously collapsed
       // grid track cannot leave the chart with a permanent 0px canvas.
       autoSize: false,
@@ -104,14 +110,46 @@ export default function Chart() {
     });
     if (host) observer.observe(host);
     pendingFrame = requestAnimationFrame(fit);
+    // Lightweight Charts cannot infer whether a user intended to inspect a
+    // previous candle. Pointer movement / wheel / touch switches to exploration.
+    // A plain click does not pause live tracking.
+    let down: {x:number;y:number;pointerId:number}|null=null;
+    const explore=()=>{
+      if(!followingRef.current)return;
+      followingRef.current=false;setFollowing(false);
+      chart.timeScale().applyOptions({shiftVisibleRangeOnNewBar:false});
+    };
+    const pointerDown=(e:PointerEvent)=>{down={x:e.clientX,y:e.clientY,pointerId:e.pointerId};};
+    const pointerMove=(e:PointerEvent)=>{
+      if(!down||e.pointerId!==down.pointerId)return;
+      if(Math.hypot(e.clientX-down.x,e.clientY-down.y)>5){explore();down=null;}
+    };
+    const pointerUp=()=>{down=null;};
+    const wheel=()=>explore();
+    host?.addEventListener("pointerdown",pointerDown,{passive:true});
+    host?.addEventListener("pointermove",pointerMove,{passive:true});
+    host?.addEventListener("pointerup",pointerUp,{passive:true});
+    host?.addEventListener("pointercancel",pointerUp,{passive:true});
+    host?.addEventListener("wheel",wheel,{passive:true});
     setReady(true);
     return () => {
       observer.disconnect();
+      host?.removeEventListener("pointerdown",pointerDown);
+      host?.removeEventListener("pointermove",pointerMove);
+      host?.removeEventListener("pointerup",pointerUp);
+      host?.removeEventListener("pointercancel",pointerUp);
+      host?.removeEventListener("wheel",wheel);
       if (pendingFrame) cancelAnimationFrame(pendingFrame);
       chart.remove(); chartRef.current = null; candleRef.current = null; volumeRef.current = null;
       linesRef.current.clear();
     };
   }, []);
+
+  // New account or timeframe is a deliberate context change, not a market update.
+  useEffect(()=>{
+    followingRef.current=true;setFollowing(true);
+    chartRef.current?.timeScale().applyOptions({shiftVisibleRangeOnNewBar:true});
+  },[tf,s.broker,s.accountInfo?.id]);
 
   // ------------------------------------------------------------------ datos
   useEffect(() => {
@@ -138,21 +176,37 @@ export default function Chart() {
         || (i > 0 && Number(b.time) <= Number(bars[i-1].time))
       )) throw new Error("El histórico contiene velas inválidas o tiempos duplicados. Revisa los datos M1.");
       const chart=chartRef.current;
-      const previous=!reset&&chart?captureViewport(chart,barsRef.current.length):null;
-      const lastLive=lastRef.current;
-      // Keep the most recent in-flight candle while MT5 uploads the closed M1.
-      if(lastLive&&bars.length&&Number(lastLive.time)>Number(bars[bars.length-1].time)&&!reset)
-        bars.push({...lastLive,time:lastLive.time as UTCTimestamp,volume:0});
-      candleRef.current.setData(bars);
-      volumeRef.current?.setData(bars.filter(b=>b.volume>0&&Number.isFinite(b.volume))
-        .map(b=>({time:b.time,value:b.volume,
-          color:b.close>=b.open?"rgba(65,174,136,.45)":"rgba(213,96,100,.45)"})));
-      timesRef.current=bars.map(b=>Number(b.time));
-      barsRef.current=bars;
-      lastRef.current=bars.length?{...bars[bars.length-1]}:null;
+      // Merge the active tick only into its own M1/M5/... bucket, so a stale
+      // historical response cannot rewind the currently forming candle.
+      if(!reset)mergeCurrentTick(bars,lastRef.current as ChartBar|null,s.tick?.time,TF_SEC[tf]);
+      const change=reset?{kind:"replace" as const,updates:bars}:historyChange(barsRef.current as ChartBar[],bars);
+      if(change.kind!=="unchanged"){
+        const previous=change.kind==="replace"&&!reset&&chart
+          ?captureViewport(chart,barsRef.current.length,followingRef.current):null;
+        if(change.kind==="replace"){
+          candleRef.current.setData(bars);
+          volumeRef.current?.setData(bars.map(b=>({time:b.time,value:b.volume,
+            color:b.close>=b.open?"rgba(65,174,136,.45)":"rgba(213,96,100,.45)"})));
+        }else{
+          for(const b of change.updates){
+            candleRef.current.update({...b,time:b.time as UTCTimestamp});
+            volumeRef.current?.update({time:b.time as UTCTimestamp,value:b.volume,
+              color:b.close>=b.open?"rgba(65,174,136,.45)":"rgba(213,96,100,.45)"});
+          }
+        }
+        timesRef.current=bars.map(b=>Number(b.time));
+        barsRef.current=bars;
+        lastRef.current=bars.length?{...bars[bars.length-1]}:null;
+        if(chart&&bars.length){
+          if(change.kind==="replace")restoreViewport(chart,previous,bars.length,reset);
+          else if(followingRef.current&&change.updates.some(b=>b.time>Number(barsRef.current[barsRef.current.length-change.updates.length-1]?.time??-Infinity)))
+            chart.timeScale().scrollToRealTime();
+        }
+      }
       loadedKeyRef.current=datasetKey;
-      setBarLoad({phase:bars.length?"ready":"empty",count:bars.length});
-      if(chart&&bars.length)restoreViewport(chart,previous,bars.length,reset);
+      // Avoid rerendering all panels when the server returns identical data.
+      setBarLoad(v=>v.phase===(bars.length?"ready":"empty")&&v.count===bars.length?v:
+        {phase:bars.length?"ready":"empty",count:bars.length});
     }).catch((e) => {
       if (cancel) return;
       setBarLoad({phase:"error",count:0,message:e?.message || "No se pudo cargar el histórico."});
@@ -172,12 +226,13 @@ export default function Chart() {
     if (bucket > last.time) {
       lastRef.current = { time: bucket, open: t.bid, high: t.bid, low: t.bid, close: t.bid };
       timesRef.current = [...timesRef.current, bucket];
-      barsRef.current = [...barsRef.current, lastRef.current];
-      // Refresh closed bars through the single synchronized loader. A second
-      // setData()/scrollToRealTime here previously reset manually panned charts.
+      barsRef.current = [...barsRef.current, {...lastRef.current,volume:0}];
       setReload(value=>value+1);
     } else if (bucket === last.time) {
       last.high = Math.max(last.high, t.bid); last.low = Math.min(last.low, t.bid); last.close = t.bid;
+      const tail=barsRef.current[barsRef.current.length-1];
+      if(tail?.time===last.time)barsRef.current[barsRef.current.length-1]={...tail,
+        high:Math.max(tail.high,last.high),low:Math.min(tail.low,last.low),close:last.close};
     } else return;
     c.update({ ...lastRef.current, time: lastRef.current.time as UTCTimestamp });
   }, [s.tick, tf]);
@@ -466,8 +521,16 @@ export default function Chart() {
         <button className={`btn sm ${drawOpen ? "on" : ""}`} title="Herramientas de dibujo" aria-pressed={drawOpen}
           onClick={() => { const v = !drawOpen; setDrawOpen(v); try { localStorage.setItem("xauai.drawopen", v ? "1" : "0"); } catch { /* sin almacenamiento */ } }}><Icon name="edit" size={14} />Dibujo</button>
         <div className="spacer" />
-        <button className="btn sm" title="Volver a las velas más recientes sin cambiar la temporalidad"
-          onClick={()=>chartRef.current?.timeScale().scrollToRealTime()}>
+        <span className={`chart-navigation-state ${following?"live":"exploring"}`}
+          role="status" aria-live="polite" title={following?"El gráfico sigue las nuevas velas":"Exploración manual: las actualizaciones no cambian tu posición"}>
+          <span className="chart-navigation-dot" />{following?"En vivo":"Explorando"}
+        </span>
+        <button className={`btn sm ${following?"":"on"}`} aria-label="Volver al precio actual y reanudar seguimiento"
+          title="Volver a la última vela y reanudar el seguimiento automático" onClick={()=>{
+            followingRef.current=true;setFollowing(true);
+            chartRef.current?.timeScale().applyOptions({shiftVisibleRangeOnNewBar:true});
+            chartRef.current?.timeScale().scrollToRealTime();
+          }}>
           <Icon name="clock" size={13}/> Actual
         </button>
         <button className={`btn sm ${ui.showForecast ? "on" : ""}`} onClick={() => ui.setShowForecast(!ui.showForecast)} disabled={!fc} aria-pressed={ui.showForecast} title="Rango histórico estimado; no indica dirección futura">Rango estimado</button>
