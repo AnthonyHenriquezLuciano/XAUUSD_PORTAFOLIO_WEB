@@ -8,7 +8,7 @@ async function read(name){const output=built.outputFiles.find(x=>x.path.endsWith
 const {historyChange,mergeCurrentTick}=await read("historySync");
 const {captureViewport,restoreViewport}=await read("viewport");
 const candle=(time,close=2500,volume=12)=>({time,open:close-1,high:close+1,low:close-2,close,volume});
-const old=Array.from({length:3000},(_,i)=>candle(1700000000+i*60,2500+i*.01));
+const old=Array.from({length:3000},(_,i)=>candle(1700000040+i*60,2500+i*.01));
 assert.equal(historyChange([],old).kind,"replace","first load only");
 assert.equal(historyChange(old,old).kind,"unchanged","identical polling should not repaint 3000 candles");
 const revise=[...old];revise[2999]=candle(old[2999].time,2600);
