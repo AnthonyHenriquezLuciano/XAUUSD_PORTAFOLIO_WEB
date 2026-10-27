@@ -246,7 +246,12 @@ export default function Chart() {
       olderExhaustedRef.current=false;setOlderEnd(false);
       const fromCache=cacheGet(key);
       if(fromCache?.length){try{ingest(fromCache,true);}catch{/*cache optional*/}}
-      else setBarLoad({phase:"loading",count:0});
+      else{
+        // Never show candles belonging to another account during a new login.
+        candleRef.current?.setData([]);volumeRef.current?.setData([]);
+        barsRef.current=[];timesRef.current=[];lastRef.current=null;
+        setBarLoad({phase:"loading",count:0});
+      }
     }
     api(`/api/bars?tf=${tf}&limit=${INITIAL_SIZE}`).then(d=>{
       if(cancelled)return;
@@ -587,7 +592,7 @@ export default function Chart() {
   const saveCurrentWorkspace=()=>{
     const name=window.prompt("Nombre del espacio de trabajo (máximo 32 caracteres):",tf+" · "+(ui.tab==="flujo"?"Order Flow":"Trading"))?.trim().slice(0,32);
     if(!name)return;
-    const ws:VisualWorkspace={id:name.toLowerCase().replace(/\\s+/g,"-"),
+    const ws:VisualWorkspace={id:name.toLowerCase().replace(/\s+/g,"-"),
       name,tf,theme:ui.chart.theme,layers:{...ui.layers},
       flow:{mode:ui.flow.mode,scope:ui.flow.scope,focus:ui.flow.focus,bins:ui.flow.bins},
       forecast:ui.showForecast,createdAt:Date.now()};
