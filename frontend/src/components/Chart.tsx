@@ -28,7 +28,7 @@ export default function Chart() {
   const fcRef = useRef<ISeriesApi<"Line">[]>([]);
   const overlayRef = useRef<ChartOverlay | null>(null);
   const timesRef = useRef<number[]>([]);
-  const barsRef = useRef<{ time: number; open: number; high: number; low: number; close: number }[]>([]);
+  const barsRef = useRef<ChartBar[]>([]);
   const [ready, setReady] = useState(false);
   const [barLoad, setBarLoad] = useState<{ phase: "loading" | "ready" | "empty" | "error"; count: number; message?: string }>({ phase: "loading", count: 0 });
   const [reload, setReload] = useState(0);
