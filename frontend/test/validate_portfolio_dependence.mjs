@@ -22,7 +22,7 @@ assert.equal(stale[0].grossNotionalUsd,null);
 assert.equal(stale[0].missingData,1);
 const otherCurrency=m.exposureBySymbol([entry("A",1,"EUR")]);
 assert.equal(otherCurrency[0].grossNotionalUsd,null);
-const missingCurrency=m.exposureBySymbol([entry("A",1,undefined)]);
+const missingCurrency=m.exposureBySymbol([entry("A",1,null)]);
 assert.equal(missingCurrency[0].grossNotionalUsd,null);
 const trade=(id,strategy,day,pnl)=>({id,account_id:"a",t_close:1700000000+day*86400,pnl,strategy});
 const few=[trade(1,"AORB",0,10),trade(2,"TOK",0,-15),trade(3,"TOK",1,25)];
