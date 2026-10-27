@@ -1,7 +1,7 @@
 /** Consolidated, read-only risk estimates for several *owned/linked* MT5 accounts.
  * Never emits trading commands. Do not sum accounts of different currencies.
  */
-export type OwnedAccount = { id:string;name:string;login?:number;server?:string };
+export type OwnedAccount = { id:string;name:string;login?:number;server?:string;symbol?:string };
 export type LiveRow = {account_id:string;balance?:number|null;equity?:number|null;bid?:number|null;ask?:number|null;updated_at?:string;open?:boolean|null };
 export type StateRow = {account_id:string;account?:any;risk?:any;ea?:any;positions?:any[];orders?:any[]};
 export type PortfolioRow = {
