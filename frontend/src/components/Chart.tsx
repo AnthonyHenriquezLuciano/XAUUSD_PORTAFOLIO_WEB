@@ -3,6 +3,8 @@ import { createChart, CrosshairMode, IChartApi, IPriceLine, ISeriesApi, LineStyl
 import { ChartOverlay } from "../chart/overlay";
 import { captureViewport, restoreViewport } from "../chart/viewport";
 import { historyChange, mergeCurrentTick, type ChartBar } from "../chart/historySync";
+import {cacheGet,cachePut,cacheKey,mergePages,HISTORICAL_PAGE_SIZE,INITIAL_SIZE} from "../chart/historyCache";
+import {readWorkspaces,writeWorkspace,removeWorkspace,readViewport,writeViewport,type VisualWorkspace} from "../chart/workspaces";
 import { chartSessionWindows } from "../sessions/marketSessions";
 import DrawingTools from "./DrawingTools";
 import { Icon, Logo } from "../icons";
@@ -33,8 +35,8 @@ export default function Chart() {
   const [barLoad, setBarLoad] = useState<{ phase: "loading" | "ready" | "empty" | "error"; count: number; message?: string }>({ phase: "loading", count: 0 });
   const [reload, setReload] = useState(0);
   // Exploratory mode never jumps back to the last candle until the user requests it.
-  const followingRef = useRef(true);
-  const [following, setFollowing] = useState(true);
+  const followingRef = useRef(false);
+  const [following, setFollowing] = useState(false);
   const [drawOpen, setDrawOpen] = useState<boolean>(() => { try { return localStorage.getItem("xauai.drawopen") === "1"; } catch { return false; } });
   const linesRef = useRef<Map<string, { line: IPriceLine; def: LineDef }>>(new Map());
   const lastRef = useRef<{ time: number; open: number; high: number; low: number; close: number } | null>(null);
@@ -49,6 +51,14 @@ export default function Chart() {
   const connected = s.status === "conectado";
   const extraRef = useRef<number[]>([]);
   const loadedKeyRef = useRef("");
+  const viewKeyRef=useRef("");
+  const olderBusyRef=useRef(false);
+  const olderExhaustedRef=useRef(false);
+  const [olderBusy,setOlderBusy]=useState(false);
+  const [olderEnd,setOlderEnd]=useState(false);
+  const [savedWorkspaces,setSavedWorkspaces]=useState<VisualWorkspace[]>(readWorkspaces);
+  const [workspaceOpen,setWorkspaceOpen]=useState(false);
+  const [historySource,setHistorySource]=useState<"cache"|"live"|"paged">("live");
   const stateRef = useRef({ s, ui });
   stateRef.current = { s, ui };
 
@@ -61,7 +71,7 @@ export default function Chart() {
       crosshair: { mode: CrosshairMode.Normal },
       rightPriceScale: { borderColor: "#262e3f", scaleMargins: { top: 0.08, bottom: 0.08 } },
       timeScale: { borderColor: "#262e3f", timeVisible: true, secondsVisible: false, rightOffset: 12,
-        lockVisibleTimeRangeOnResize: true, shiftVisibleRangeOnNewBar: true },
+        lockVisibleTimeRangeOnResize: true, shiftVisibleRangeOnNewBar: false, fixLeftEdge:false },
       kineticScroll: {mouse:true,touch:true},
       // Size is controlled explicitly by ResizeObserver so a previously collapsed
       // grid track cannot leave the chart with a permanent 0px canvas.
@@ -124,6 +134,12 @@ export default function Chart() {
     // previous candle. Pointer movement / wheel / touch switches to exploration.
     // A plain click does not pause live tracking.
     let down: {x:number;y:number;pointerId:number}|null=null;
+    const persistView=()=>{
+      const scale=chart.timeScale(),range=scale.getVisibleRange();
+      if(viewKeyRef.current&&range&&typeof range.from==="number"&&typeof range.to==="number"){
+        writeViewport(viewKeyRef.current,{from:Number(range.from),to:Number(range.to)});
+      }
+    };
     const explore=()=>{
       if(!followingRef.current)return;
       followingRef.current=false;setFollowing(false);
@@ -134,8 +150,8 @@ export default function Chart() {
       if(!down||e.pointerId!==down.pointerId)return;
       if(Math.hypot(e.clientX-down.x,e.clientY-down.y)>5){explore();down=null;}
     };
-    const pointerUp=()=>{down=null;};
-    const wheel=()=>explore();
+    const pointerUp=()=>{if(down)persistView();down=null;};
+    const wheel=()=>{explore();window.setTimeout(persistView,450);};
     host?.addEventListener("pointerdown",pointerDown,{passive:true});
     host?.addEventListener("pointermove",pointerMove,{passive:true});
     host?.addEventListener("pointerup",pointerUp,{passive:true});
@@ -156,10 +172,12 @@ export default function Chart() {
     };
   }, []);
 
-  // New account or timeframe is a deliberate context change, not a market update.
+  // Exploration is ALWAYS the default. Changing timeframe never grants
+  // automatic scrolling back to the latest candles.
   useEffect(()=>{
-    followingRef.current=true;setFollowing(true);
-    chartRef.current?.timeScale().applyOptions({shiftVisibleRangeOnNewBar:true});
+    followingRef.current=false;setFollowing(false);
+    chartRef.current?.timeScale().applyOptions({shiftVisibleRangeOnNewBar:false});
+    olderExhaustedRef.current=false;setOlderEnd(false);
   },[tf,s.broker,s.accountInfo?.id]);
 
   // ------------------------------------------------------------------ datos
@@ -371,7 +389,7 @@ export default function Chart() {
     ov.setData({
       tf: TF_SEC[tf], times: () => timesRef.current, nowT: last, atr: s.signals?.atr, theme: th,
       flow: s.flow, flowFocus: ui.tab === "flujo" ? ui.flow.focus : "all",
-      flowLayers: {profile:ui.layers.flujo !== false, fvg:ui.layers.fvg !== false},
+      flowLayers: {profile:ui.layers.flujo !== false, fvg:ui.layers.fvg !== false,heatmap:ui.layers.heatmap!==false},
       layers: { rangos: !!ui.layers.rangos && structure, sesionesReales: ui.layers.sesionesReales !== false && !focused,
         niveles: !!ui.layers.niveles && structure, estrategias: !!ui.layers.estrategias && !focused,
         operaciones: !!ui.layers.operaciones && !focused, rr: ui.chart.rr && !focused },
@@ -531,7 +549,7 @@ export default function Chart() {
           <button className={`btn sm ${layersOpen ? "on" : ""}`} onClick={() => setLayersOpen(!layersOpen)} aria-expanded={layersOpen}>Capas <Icon name="chevron" size={13} /></button>
           {layersOpen ? (
             <div className="layers-menu" onMouseLeave={() => setLayersOpen(false)}>
-              {([["volumen", "Actividad de ticks (histograma por vela)", "#72af94"], ["rangos", "Rangos del EA (ALB/TOK/AORB)", th.zone.asia], ["sesionesReales", "Sesiones reales (Tokio/Londres/NY)", "#d8ad61"], ["flujo", "Perfil de volumen y POC", "#e5bf7c"], ["fvg", "Ineficiencias FVG", "#16b07a"], ["niveles", "Niveles clave", th.level.pd], ["estrategias", "Órdenes de las estrategias", th.buy], ["operaciones", "Operaciones (entrada → salida)", th.win], ["noticias", "Noticias USD", th.sl]] as [string, string, string][]).map(([k, l, c]) => (
+              {([["heatmap","Mapa de confluencias (NO order book)","#dfb976"],["volumen", "Actividad de ticks (histograma por vela)", "#72af94"], ["rangos", "Rangos del EA (ALB/TOK/AORB)", th.zone.asia], ["sesionesReales", "Sesiones reales (Tokio/Londres/NY)", "#d8ad61"], ["flujo", "Perfil de volumen y POC", "#e5bf7c"], ["fvg", "Ineficiencias FVG", "#16b07a"], ["niveles", "Niveles clave", th.level.pd], ["estrategias", "Órdenes de las estrategias", th.buy], ["operaciones", "Operaciones (entrada → salida)", th.win], ["noticias", "Noticias USD", th.sl]] as [string, string, string][]).map(([k, l, c]) => (
                 <label key={k} className="layer-item"><input type="checkbox" checked={ui.layers[k] !== false} onChange={(e) => ui.setLayer(k, e.target.checked)} /><i style={{ background: c }} />{l}</label>
               ))}
               <label className="layer-item"><input type="checkbox" checked={ui.chart.rr} onChange={(e) => ui.setChart({ rr: e.target.checked })} /><i style={{ background: th.tp }} />Zonas de riesgo / beneficio</label>
