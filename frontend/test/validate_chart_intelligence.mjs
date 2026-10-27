@@ -19,7 +19,7 @@ const candle=time=>({time,open:2400,high:2402,low:2399,close:2401,volume:25});
 const page1=Array.from({length:900},(_,i)=>candle(i*60+60));
 const page0=Array.from({length:700},(_,i)=>candle(i*60-698*60));
 const merged=mergePages(page0,page1);
-assert.equal(merged.length,1598,"overlap timestamps are deduplicated");
+assert.equal(merged.length,1599,"overlap timestamps are deduplicated");
 assert.equal(merged[merged.length-1].time,page1.at(-1).time);
 assert.ok(INITIAL_SIZE<1500&&HISTORICAL_PAGE_SIZE<1000);
 const k=cacheKey("account-a","M5"),other=cacheKey("account-b","M5");
