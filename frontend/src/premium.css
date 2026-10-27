@@ -244,3 +244,39 @@ body { background: radial-gradient(ellipse 80% 48% at 60% -20%, #242017 0%, var(
 @media(max-width:1000px){.portfolio-metrics{grid-template-columns:repeat(2,minmax(0,1fr));}}
 @media(max-width:620px){.portfolio-metrics,.portfolio-item-grid{grid-template-columns:repeat(2,minmax(0,1fr));}.portfolio-list{padding:12px}.portfolio-item{padding:13px}}
 @media(max-width:420px){.portfolio-metrics{grid-template-columns:1fr}}
+
+/* Portfolio Intelligence 3.0 · capital dashboard and evidence-first research */
+.pi-workspace{gap:18px}
+.pi-topbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
+.pi-tabs{display:flex;gap:4px;padding:4px;border:1px solid #35404b;background:#11171d;border-radius:10px}
+.pi-tabs button{border:0;color:#9faebb;background:transparent;padding:10px 17px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer}
+.pi-tabs button.on{color:#e8c99b;background:rgba(200,170,120,.13);box-shadow:inset 0 0 0 1px rgba(200,170,120,.27)}
+.pi-account-filter{display:flex;align-items:center;gap:12px;font-size:11px;color:#aab5c1;font-weight:650}
+.pi-account-filter select{min-width:180px;background:#1b222a;border:1px solid #36424e;color:#ecedf0;border-radius:8px;padding:8px 12px}
+.pi-section-head{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap}
+.pi-section-head span{display:block;color:var(--gold);letter-spacing:1.3px;font-size:10px;font-weight:700;margin-bottom:5px}
+.pi-section-head h2{margin:0;font-size:17px}
+.pi-section-head small{font-size:11px;color:var(--muted)}
+.pi-curve{width:100%;background:#10161e;border:1px solid #2f3a46;padding:15px;border-radius:10px}
+.pi-curve svg{display:block;width:100%;height:215px;overflow:visible}
+.pi-curve>div{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.pi-curve span{font-size:11px;color:var(--muted)}
+.pi-curve b{font:650 15px var(--mono)}
+.pi-smallmetrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}
+.pi-smallmetrics>div{display:flex;flex-direction:column;gap:6px;border:1px solid #313b44;border-radius:8px;padding:12px;background:#182028}
+.pi-smallmetrics span{font-size:11px;color:var(--muted)}
+.pi-smallmetrics b{font:600 15px var(--mono);overflow-wrap:anywhere}
+.pi-table-scroll{width:100%;overflow-x:auto}
+.pi-table{border-collapse:collapse;width:100%;font-size:12px;min-width:570px}
+.pi-table th{text-align:left;white-space:nowrap;letter-spacing:.5px;font-size:10px;text-transform:uppercase;color:#aebbc7;background:#1b252d;padding:12px}
+.pi-table td{border-bottom:1px solid #303a45;padding:12px;color:#dae1e8}
+.pi-table td:first-child{font-weight:650}
+.pi-table td small{display:block;color:#8f9ba7;font-size:10px;margin-top:4px}
+.pi-table .buy{color:var(--buy)}.pi-table .sell{color:var(--sell)}
+.pi-alert{display:flex;flex-direction:column;gap:4px;padding:12px 14px;border:1px solid #3d4b56;background:#182028;border-left:3px solid #8d9fb1;border-radius:8px}
+.pi-alert.critical{border-left-color:#f17f82}.pi-alert.warning{border-left-color:#e9b869}.pi-alert.info{border-left-color:#8eaacc}
+.pi-alert strong{font-size:12px}.pi-alert span{color:#aeb8c3;font-size:11px;line-height:1.6}
+.pi-disclaimer{background:#141a20}.pi-disclaimer h2{font-size:14px}.pi-disclaimer p{font-size:11.5px;line-height:1.7;color:#aab5c1;margin:0}
+@media(max-width:800px){.pi-smallmetrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:560px){.pi-tabs{width:100%}.pi-tabs button{flex:1;padding:10px 8px}.pi-account-filter{width:100%;justify-content:space-between}
+.pi-account-filter select{min-width:0;max-width:65%}.pi-curve{padding:8px}.pi-curve svg{height:150px}.pi-smallmetrics>div{padding:9px}}
