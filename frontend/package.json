@@ -14,8 +14,9 @@
     "test:commands": "node test/validate_commands.mjs",
     "test:research": "node test/validate_research.mjs",
     "test:portfolio": "node test/validate_portfolio.mjs",
+    "test:portfolio-intelligence": "node test/validate_portfolio_intelligence.mjs",
     "test:ui": "node test/validate_ui.mjs",
-    "test:release": "npm run build && npm run test:sessions && npm run test:flow && npm run test:flow-advanced && npm run test:risk && npm run test:commands && npm run test:research && npm run test:portfolio && npm run test:ui"
+    "test:release": "npm run build && npm run test:sessions && npm run test:flow && npm run test:flow-advanced && npm run test:risk && npm run test:commands && npm run test:research && npm run test:portfolio && npm run test:portfolio-intelligence && npm run test:ui"
   },
   "dependencies": {
     "@fontsource/ibm-plex-mono": "^5.1.1",
