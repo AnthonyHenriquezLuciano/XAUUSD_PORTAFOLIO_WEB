@@ -67,7 +67,7 @@ restoreViewport(chart,snap,210,true);
 assert.equal(changes[0][0],"logical","timeframe change starts in recent 160 candles");
 assert.ok(changes[0][1].from>=45,"does not fit entire 30-day history");
 view.getVisibleLogicalRange=()=>({from:150,to:200});
-const following=captureViewport(chart,200);changes=[];
+const following=captureViewport(chart,200,true);changes=[];
 restoreViewport(chart,following,220,false);
 assert.equal(changes[0][0],"logical");
 assert.ok(changes[0][1].from>100,"follow recent data without full reset");

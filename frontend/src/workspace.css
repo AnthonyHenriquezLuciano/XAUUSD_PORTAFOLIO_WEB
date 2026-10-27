@@ -81,3 +81,13 @@
 .chart-data-spinner{width:26px;height:26px;border:2px solid #354450;border-top-color:var(--gold);border-radius:50%;animation:chart-load .8s linear infinite}
 @keyframes chart-load{to{transform:rotate(360deg)}}
 @media(prefers-reduced-motion:reduce){.chart-data-spinner{animation:none;border-top-color:var(--gold)}}
+
+/* Motion-safe, latency-free chart interaction feedback. Mode never auto-resets. */
+.chart-navigation-state{display:inline-flex;align-items:center;gap:6px;font:600 10px var(--mono);
+ white-space:nowrap;padding:5px 8px;border:1px solid #34414b;border-radius:7px;color:#a8b8c4;background:#161f27}
+.chart-navigation-state .chart-navigation-dot{height:7px;width:7px;border-radius:50%;background:#daa95d;flex:none}
+.chart-navigation-state.live .chart-navigation-dot{background:#47be92;box-shadow:0 0 0 3px rgba(71,190,146,.09)}
+.chart-navigation-state.exploring{border-color:#78664c;color:#e3c392;background:#262219}
+.chart-navigation-state.exploring .chart-navigation-dot{background:#e1b56a}
+.chartwrap>.chart{touch-action:pan-y;overscroll-behavior:contain}
+@media(max-width:560px){.chart-navigation-state{font-size:9px;padding:5px 6px}}
