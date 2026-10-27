@@ -301,3 +301,15 @@ body { background: radial-gradient(ellipse 80% 48% at 60% -20%, #242017 0%, var(
 .pi-scenario-fields input:focus{border-color:#bd9d6f;outline:2px solid rgba(201,169,115,.13)}
 @media(max-width:1100px){.pi-scenario-fields{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:560px){.pi-scenario-fields{grid-template-columns:1fr}.pi-smallmetrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* Portfolio Guardian: explainable risk observations, not black-box trading */
+.pi-guardian-item{display:flex;flex-direction:column;gap:12px;padding:16px;background:#17202a;border-radius:10px;border:1px solid #33404d;border-left:3px solid #7da0bb}
+.pi-guardian-item.critical{border-left-color:#ee747c}.pi-guardian-item.warning{border-left-color:#e9b869}
+.pi-guardian-item.review{border-left-color:#96aac0}
+.pi-guardian-heading{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.pi-guardian-heading strong{font-size:14px;color:#f0eee9}
+.pi-guardian-heading span{font:650 10px var(--mono);letter-spacing:.3px;color:#b5c2cd;border:1px solid #44505c;border-radius:5px;padding:5px 7px}
+.pi-guardian-item>div:not(.pi-guardian-heading){display:flex;flex-direction:column;gap:4px}
+.pi-guardian-item>div b{font-size:10px;color:#deb984;letter-spacing:.4px}
+.pi-guardian-item p{margin:0;font-size:12px;color:#bac4cc;line-height:1.6}
+.pi-guardian-item>small{color:#8798a7;font-size:10px}
