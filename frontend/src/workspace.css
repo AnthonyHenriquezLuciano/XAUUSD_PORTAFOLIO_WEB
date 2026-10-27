@@ -91,3 +91,13 @@
 .chart-navigation-state.exploring .chart-navigation-dot{background:#e1b56a}
 .chartwrap>.chart{touch-action:pan-y;overscroll-behavior:contain}
 @media(max-width:560px){.chart-navigation-state{font-size:9px;padding:5px 6px}}
+
+/* Chart Intelligence 4.0 — intentional navigation and persistence. */
+.terminal-history-source{font:550 10px var(--mono);color:#9facb7;white-space:nowrap;letter-spacing:.015em}
+.chart-workspace-menu{min-width:265px;max-width:315px;max-height:390px;overflow-y:auto;display:flex;flex-direction:column;gap:8px}
+.chart-workspace-menu>.btn{width:100%}
+.chart-workspace-item{display:flex;align-items:center;justify-content:space-between;gap:7px;background:#202a33;border:1px solid #35404a;border-radius:7px;padding:3px}
+.chart-workspace-item button{border:0;background:transparent;color:#dbe2e8;cursor:pointer;text-align:left;padding:7px 9px;font-size:11px;min-height:32px}
+.chart-workspace-item button:first-child{flex:1}
+.chart-workspace-item button:hover{color:var(--gold-hi)}
+@media(max-width:720px){.terminal-history-source{display:none}.chart-workspace-menu{max-width:min(300px,90vw)}}
