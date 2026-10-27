@@ -11,6 +11,7 @@
     "test:flow": "node test/validate_flow.mjs",
     "test:flow-advanced": "node test/validate_flow_advanced.mjs",
     "test:chart-motion": "node test/validate_chart_motion.mjs",
+    "test:chart-intelligence": "node test/validate_chart_intelligence.mjs",
     "test:risk": "node test/validate_risk.mjs",
     "test:commands": "node test/validate_commands.mjs",
     "test:research": "node test/validate_research.mjs",
@@ -20,7 +21,7 @@
     "test:portfolio-scenarios": "node test/validate_portfolio_scenarios.mjs",
     "test:portfolio-guardian": "node test/validate_portfolio_guardian.mjs",
     "test:ui": "node test/validate_ui.mjs",
-    "test:release": "npm run build && npm run test:sessions && npm run test:flow && npm run test:flow-advanced && npm run test:chart-motion && npm run test:risk && npm run test:commands && npm run test:research && npm run test:portfolio && npm run test:portfolio-intelligence && npm run test:portfolio-dependence && npm run test:portfolio-scenarios && npm run test:portfolio-guardian && npm run test:ui"
+    "test:release": "npm run build && npm run test:sessions && npm run test:flow && npm run test:flow-advanced && npm run test:chart-motion && npm run test:chart-intelligence && npm run test:risk && npm run test:commands && npm run test:research && npm run test:portfolio && npm run test:portfolio-intelligence && npm run test:portfolio-dependence && npm run test:portfolio-scenarios && npm run test:portfolio-guardian && npm run test:ui"
   },
   "dependencies": {
     "@fontsource/ibm-plex-mono": "^5.1.1",
