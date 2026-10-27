@@ -134,6 +134,7 @@ export default function Chart() {
     // previous candle. Pointer movement / wheel / touch switches to exploration.
     // A plain click does not pause live tracking.
     let down: {x:number;y:number;pointerId:number}|null=null;
+    let dragged=false;
     const persistView=()=>{
       const scale=chart.timeScale(),range=scale.getVisibleRange();
       if(viewKeyRef.current&&range&&typeof range.from==="number"&&typeof range.to==="number"){
@@ -145,12 +146,12 @@ export default function Chart() {
       followingRef.current=false;setFollowing(false);
       chart.timeScale().applyOptions({shiftVisibleRangeOnNewBar:false});
     };
-    const pointerDown=(e:PointerEvent)=>{down={x:e.clientX,y:e.clientY,pointerId:e.pointerId};};
+    const pointerDown=(e:PointerEvent)=>{dragged=false;down={x:e.clientX,y:e.clientY,pointerId:e.pointerId};};
     const pointerMove=(e:PointerEvent)=>{
       if(!down||e.pointerId!==down.pointerId)return;
-      if(Math.hypot(e.clientX-down.x,e.clientY-down.y)>5){explore();down=null;}
+      if(Math.hypot(e.clientX-down.x,e.clientY-down.y)>5){dragged=true;explore();down=null;}
     };
-    const pointerUp=()=>{if(down)persistView();down=null;};
+    const pointerUp=()=>{if(dragged)persistView();down=null;dragged=false;};
     const wheel=()=>{explore();window.setTimeout(persistView,450);};
     host?.addEventListener("pointerdown",pointerDown,{passive:true});
     host?.addEventListener("pointermove",pointerMove,{passive:true});
@@ -583,6 +584,26 @@ export default function Chart() {
   }, [contract]);
 
   // ------------------------------------------------------------------ interfaz
+  const saveCurrentWorkspace=()=>{
+    const name=window.prompt("Nombre del espacio de trabajo (máximo 32 caracteres):",tf+" · "+(ui.tab==="flujo"?"Order Flow":"Trading"))?.trim().slice(0,32);
+    if(!name)return;
+    const ws:VisualWorkspace={id:name.toLowerCase().replace(/\\s+/g,"-"),
+      name,tf,theme:ui.chart.theme,layers:{...ui.layers},
+      flow:{mode:ui.flow.mode,scope:ui.flow.scope,focus:ui.flow.focus,bins:ui.flow.bins},
+      forecast:ui.showForecast,createdAt:Date.now()};
+    setSavedWorkspaces(writeWorkspace(ws));setWorkspaceOpen(false);
+    toast("Espacio visual guardado: "+name,"ok");
+  };
+  const loadWorkspace=(ws:VisualWorkspace)=>{
+    followingRef.current=false;setFollowing(false);
+    if(ws.tf in TF_SEC)setTf(ws.tf);
+    ui.setChart({theme:ws.theme});
+    for(const [key,value] of Object.entries(ws.layers))if(typeof value==="boolean")ui.setLayer(key,value);
+    ui.setFlow({mode:ws.flow.mode as any,scope:ws.flow.scope as any,
+      focus:ws.flow.focus as any,bins:Number(ws.flow.bins)||64});
+    ui.setShowForecast(ws.forecast);
+    setWorkspaceOpen(false);
+  };
   const fc = s.signals?.forecast;
   const p4 = fc?.points?.find((p: any) => p.h === 4);
   return (
@@ -606,7 +627,12 @@ export default function Chart() {
       </div>
       <div className="toolbar">
         <div className="seg">
-          {Object.keys(TF_SEC).map((k) => <button key={k} className={tf === k ? "on" : ""} onClick={() => setTf(k)}>{k}</button>)}
+          {Object.keys(TF_SEC).map((k) => <button key={k} className={tf === k ? "on" : ""} onClick={()=>{
+            const range=chartRef.current?.timeScale().getVisibleRange();
+            if(range&&viewKeyRef.current&&typeof range.from==="number"&&typeof range.to==="number")
+              writeViewport(viewKeyRef.current,{from:Number(range.from),to:Number(range.to)});
+            setTf(k);
+          }}>{k}</button>)}
         </div>
         <div className="layers-wrap">
           <button className={`btn sm ${layersOpen ? "on" : ""}`} onClick={() => setLayersOpen(!layersOpen)} aria-expanded={layersOpen}>Capas <Icon name="chevron" size={13} /></button>
@@ -619,11 +645,36 @@ export default function Chart() {
             </div>
           ) : null}
         </div>
+        <div className="layers-wrap">
+          <button className="btn sm" onClick={()=>setWorkspaceOpen(v=>!v)} aria-expanded={workspaceOpen} title="Guardar y recuperar configuraciones visuales">
+            <Icon name="layout-dashboard" size={13}/> Espacios
+          </button>
+          {workspaceOpen&&<div className="layers-menu chart-workspace-menu">
+            <button className="btn sm" onClick={saveCurrentWorkspace}>Guardar vista actual</button>
+            {savedWorkspaces.map(ws=><div className="chart-workspace-item" key={ws.id}>
+              <button onClick={()=>loadWorkspace(ws)}>{ws.name} · {ws.tf}</button>
+              <button title={"Eliminar "+ws.name} aria-label={"Eliminar "+ws.name}
+                onClick={()=>setSavedWorkspaces(removeWorkspace(ws.id))}><Icon name="x" size={13}/></button>
+            </div>)}
+            {!savedWorkspaces.length&&<span className="premium-note">Todavía no guardaste ningún espacio.</span>}
+          </div>}
+        </div>
         <button className="btn sm" title="Perfil de volumen, POC, VWAP y FVG" onClick={() => ui.setTab("flujo")}>Order Flow</button>
         <button className="btn sm" title="Horarios de Tokio, Londres y Nueva York" onClick={() => ui.setTab("sesiones")}>Sesiones</button>
         <button className={`btn sm ${drawOpen ? "on" : ""}`} title="Herramientas de dibujo" aria-pressed={drawOpen}
           onClick={() => { const v = !drawOpen; setDrawOpen(v); try { localStorage.setItem("xauai.drawopen", v ? "1" : "0"); } catch { /* sin almacenamiento */ } }}><Icon name="edit" size={14} />Dibujo</button>
         <div className="spacer" />
+        <span className="terminal-history-source" title="Historial paginado; los datos históricos adicionales dependen de lo disponible en MT5">{olderBusy?"Cargando…":historySource==="cache"?"Caché local":historySource==="paged"?"Histórico ampliado":"MT5"}</span>
+        <button className="btn sm" disabled={!connected||olderBusy||olderEnd||!barsRef.current.length}
+          title="Solicitar velas anteriores y conservar tu ubicación actual" onClick={()=>{
+            const chart=chartRef.current;if(!chart)return;
+            const r=chart.timeScale().getVisibleLogicalRange();
+            if(!r)return;
+            followingRef.current=false;setFollowing(false);
+            chart.timeScale().setVisibleLogicalRange({from:Math.min(0,Number(r.from)),to:Math.min(0,Number(r.from))+(Number(r.to)-Number(r.from))});
+          }}>
+          <Icon name="chevron-left" size={13}/> Historial
+        </button>
         <span className={`chart-navigation-state ${following?"live":"exploring"}`}
           role="status" aria-live="polite" title={following?"El gráfico sigue las nuevas velas":"Exploración manual: las actualizaciones no cambian tu posición"}>
           <span className="chart-navigation-dot" />{following?"En vivo":"Explorando"}
