@@ -61,7 +61,7 @@ export default function Chart() {
       crosshair: { mode: CrosshairMode.Normal },
       rightPriceScale: { borderColor: "#262e3f", scaleMargins: { top: 0.08, bottom: 0.08 } },
       timeScale: { borderColor: "#262e3f", timeVisible: true, secondsVisible: false, rightOffset: 12,
-        shiftVisibleRangeOnNewBar: true },
+        lockVisibleTimeRangeOnResize: true, shiftVisibleRangeOnNewBar: true },
       kineticScroll: {mouse:true,touch:true},
       // Size is controlled explicitly by ResizeObserver so a previously collapsed
       // grid track cannot leave the chart with a permanent 0px canvas.
@@ -231,7 +231,8 @@ export default function Chart() {
   useEffect(() => {
     const t = s.tick;
     const c = candleRef.current;
-    if (!t || !c || !lastRef.current) return;
+    const accountTfKey=[s.broker,s.accountInfo?.id||"sim",tf].join(":");
+    if (!connected || loadedKeyRef.current!==accountTfKey || !t || !c || !lastRef.current) return;
     const sec = TF_SEC[tf];
     const bucket = t.time - (t.time % sec);
     const last = lastRef.current;
