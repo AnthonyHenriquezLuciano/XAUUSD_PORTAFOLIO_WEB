@@ -6,6 +6,7 @@ import {MetricCard} from "../components/DashboardPrimitives";
 import LoadingState from "../components/LoadingState";
 import {summarizeAccount,portfolioTotals,type OwnedAccount,type LiveRow,type StateRow} from "../premium/portfolioRisk";
 import {exposureBySymbol,strategyDependence} from "../premium/portfolioDependence";
+import {portfolioBootstrap,scalingScenario} from "../premium/portfolioScenarios";
 import {byAccountPerformance,byStrategyPerformance,portfolioInsights,portfolioClosedCurve,
   type PortfolioTrade} from "../premium/portfolioAnalytics";
 type Entry={acc:OwnedAccount;live?:LiveRow;state?:StateRow};
@@ -37,7 +38,9 @@ export default function PortfolioCockpit(){
  const [loading,setLoading]=useState(true),[error,setError]=useState("");
  const [now,setNow]=useState(Date.now()),[reload,setReload]=useState(0);
  const [activeId,setActiveId]=useState("all");
- const [panel,setPanel]=useState<"overview"|"strategies"|"risk"|"dependence">("overview");
+ const [panel,setPanel]=useState<"overview"|"strategies"|"risk"|"dependence"|"laboratory"|"scaling">("overview");
+ const [scenario,setScenario]=useState({existing:5000,accounts25:2,accounts50:0,ratePct:5,splitPct:80,months:12});
+ const [fee25,setFee25]=useState(""),[fee50,setFee50]=useState("");
  const [capped,setCapped]=useState(false);
  useEffect(()=>{
    let cancelled=false;
@@ -83,6 +86,9 @@ export default function PortfolioCockpit(){
  const filteredEntries=useMemo(()=>activeId==="all"?entries:entries.filter(x=>x.acc.id===activeId),[entries,activeId]);
  const exposures=useMemo(()=>exposureBySymbol(filteredEntries),[filteredEntries,now]);
  const correlations=useMemo(()=>strategyDependence(visibleTrades),[visibleTrades]);
+ const study=useMemo(()=>portfolioBootstrap(visibleTrades),[visibleTrades]);
+ const plan=useMemo(()=>scalingScenario({...scenario,
+   fee25:fee25.trim()?Number(fee25):null,fee50:fee50.trim()?Number(fee50):null}),[scenario,fee25,fee50]);
  const nTrades=perf.reduce((a,b)=>a+b.trades,0),realized=perf.reduce((a,b)=>a+b.net,0);
  const winners=perf.reduce((a,b)=>a+b.wins,0),wins=nTrades?winners/nTrades:null;
  const displayEquity=totals.usdAccounts&&visible.every(x=>x.connected&&!x.unknown)&&totals.excluded===0?totals.equityUsd:null;
@@ -95,7 +101,7 @@ export default function PortfolioCockpit(){
    {loading&&<LoadingState label="Cargando cartera y cierres registrados…"/>}
    <div className="pi-topbar">
      <div className="pi-tabs" role="tablist" aria-label="Secciones del portafolio">
-       {([["overview","Capital"],["strategies","Estrategias"],["risk","Riesgo"],["dependence","Dependencia"] ] as const).map(([key,label])=>
+       {([["overview","Capital"],["strategies","Estrategias"],["risk","Riesgo"],["dependence","Dependencia"],["laboratory","Laboratorio"],["scaling","Escalamiento"] ] as const).map(([key,label])=>
          <button key={key} role="tab" aria-selected={panel===key} className={panel===key?"on":""} onClick={()=>setPanel(key)}>{label}</button>)}
      </div>
      <label className="pi-account-filter">Cuenta
@@ -216,6 +222,64 @@ export default function PortfolioCockpit(){
         <p className="premium-note">Solo se comparan los días en que ambas estrategias tuvieron cierres. Esto no prueba correlación de entradas intradía ni independencia futura. Con muestras insuficientes no se muestra una correlación fabricada.</p>
       </section>
    </>}
+   {panel==="laboratory"&&<section className="portfolio-list">
+     <header className="pi-section-head"><div><span>SCIENTIFIC PORTFOLIO LAB</span><h2>Escenarios de riesgo con datos cerrados</h2></div>
+       <small>Validación cronológica · no ejecuta operaciones</small></header>
+     <div className="pi-smallmetrics">
+       <div><span>Cierres completos</span><b>{study.closings}</b></div>
+       <div><span>Días con cierres</span><b>{study.activeDays}</b></div>
+       <div><span>Días entrenamiento</span><b>{study.trainingDays}</b></div>
+       <div><span>Días reservados</span><b>{study.holdoutDays}</b></div>
+     </div>
+     {!study.eligible?<div className="pi-alert warning" role="status"><strong>Investigación sin evidencia suficiente</strong>
+       <span>{study.reason} No se generan probabilidades, percentiles ni simulaciones con sólo unas pocas operaciones.</span></div>:<>
+       <div className="pi-smallmetrics">
+         <div><span>P&L P5 en {study.horizonDays} días activos</span><b>{tradeMoney(study.p05!)}</b></div>
+         <div><span>P&L mediano</span><b>{tradeMoney(study.p50!)}</b></div>
+         <div><span>P&L P95</span><b>{tradeMoney(study.p95!)}</b></div>
+         <div><span>Drawdown P95*</span><b>{money(study.maxDrawdownP95)}</b></div>
+       </div>
+       <div className="pi-smallmetrics">
+         <div><span>Escenarios con caída 10%*</span><b>{percentage(study.breachFrequency)}</b></div>
+         <div><span>Escenarios que tocaron +8%*</span><b>{percentage(study.targetFrequency)}</b></div>
+         <div><span>Promedio de reserva / día</span><b>{study.holdoutAvgPerDay==null?"N/D":tradeMoney(study.holdoutAvgPerDay)}</b></div>
+         <div><span>Trayectorias muestreadas</span><b>{study.paths}</b></div>
+       </div>
+     </>}
+     <p className="premium-note">{study.method} {study.reason}</p>
+     <p className="premium-note">*Los umbrales 10% y +8%, así como un balance de referencia de $5,000, son hipótesis de investigación. No se ha simulado drawdown intradía, fases de evaluación, retiros ni todos los costes. Esta frecuencia no debe presentarse como tasa real de aprobación de fondeo.</p>
+   </section>}
+   {panel==="scaling"&&<section className="portfolio-list">
+     <header className="pi-section-head"><div><span>FUNDING & SCALING PLANNER</span><h2>Simulador de crecimiento del capital administrado</h2></div>
+       <small>Solo cálculos bajo supuestos editables</small></header>
+     <div className="pi-scenario-fields">
+       <label>Capital nominal existente · USD<input type="number" min={0} step={1000} value={scenario.existing}
+         onChange={e=>setScenario(v=>({...v,existing:Number(e.target.value)}))}/></label>
+       <label>Cuentas adicionales de 25K<input type="number" min={0} max={30} step={1} value={scenario.accounts25}
+         onChange={e=>setScenario(v=>({...v,accounts25:Number(e.target.value)}))}/></label>
+       <label>Cuentas adicionales de 50K<input type="number" min={0} max={30} step={1} value={scenario.accounts50}
+         onChange={e=>setScenario(v=>({...v,accounts50:Number(e.target.value)}))}/></label>
+       <label>Hipótesis de rendimiento mensual · %<input type="number" min={-20} max={30} step={.5} value={scenario.ratePct}
+         onChange={e=>setScenario(v=>({...v,ratePct:Number(e.target.value)}))}/></label>
+       <label>Participación del trader · %<input type="number" min={0} max={100} step={1} value={scenario.splitPct}
+         onChange={e=>setScenario(v=>({...v,splitPct:Number(e.target.value)}))}/></label>
+       <label>Horizonte de meses<input type="number" min={1} max={60} step={1} value={scenario.months}
+         onChange={e=>setScenario(v=>({...v,months:Number(e.target.value)}))}/></label>
+       <label>Precio de evaluación por cuenta 25K · USD<input type="number" min={0} step={1} placeholder="Sin dato"
+         value={fee25} onChange={e=>setFee25(e.target.value)}/></label>
+       <label>Precio de evaluación por cuenta 50K · USD<input type="number" min={0} step={1} placeholder="Sin dato"
+         value={fee50} onChange={e=>setFee50(e.target.value)}/></label>
+     </div>
+     {!plan.valid?<div className="premium-warn">Revisa los parámetros: cantidades enteras no negativas, 1–60 meses y porcentajes dentro de los límites mostrados.</div>:
+       <div className="pi-smallmetrics">
+         <div><span>Capital nominal hipotético</span><b>{money(plan.nominalFunded)}</b></div>
+         <div><span>Retiro mensual aritmético</span><b>{money(plan.monthlyWithdrawEstimate)}</b></div>
+         <div><span>Retiro acumulado ilustrativo</span><b>{money(plan.grossWithdrawHorizon)}</b></div>
+         <div><span>Resultado menos precios de evaluación*</span><b>{money(plan.afterPurchaseFees)}</b></div>
+       </div>}
+     <p className="premium-note">{plan.reason}</p>
+     <p className="premium-note">El capital nominal de fondeo no es dinero propio ni equivale a dinero disponible para retirar. La hipótesis mensual no está respaldada por un pronóstico y no contempla el riesgo de perder cuentas. *El resultado neto de precios de evaluación es N/D mientras no ingreses los precios correspondientes; tampoco incluye impuestos ni costes operativos.</p>
+   </section>}
    <section className="portfolio-list pi-disclaimer">
      <h2>Integridad financiera y alcance</h2>
      <p>Las cifras de posiciones y márgenes son estimaciones de la web; no sustituyen los límites del bróker ni de la firma. P&L histórico procede de cierres MT5 disponibles y puede omitir comisiones, swaps o movimientos no sincronizados.</p>
