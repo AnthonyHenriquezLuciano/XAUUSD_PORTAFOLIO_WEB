@@ -5,6 +5,7 @@ import {useUI} from "../uiState";
 import {MetricCard} from "../components/DashboardPrimitives";
 import LoadingState from "../components/LoadingState";
 import {summarizeAccount,portfolioTotals,type OwnedAccount,type LiveRow,type StateRow} from "../premium/portfolioRisk";
+import {exposureBySymbol,strategyDependence} from "../premium/portfolioDependence";
 import {byAccountPerformance,byStrategyPerformance,portfolioInsights,portfolioClosedCurve,
   type PortfolioTrade} from "../premium/portfolioAnalytics";
 type Entry={acc:OwnedAccount;live?:LiveRow;state?:StateRow};
@@ -36,7 +37,7 @@ export default function PortfolioCockpit(){
  const [loading,setLoading]=useState(true),[error,setError]=useState("");
  const [now,setNow]=useState(Date.now()),[reload,setReload]=useState(0);
  const [activeId,setActiveId]=useState("all");
- const [panel,setPanel]=useState<"overview"|"strategies"|"risk">("overview");
+ const [panel,setPanel]=useState<"overview"|"strategies"|"risk"|"dependence">("overview");
  const [capped,setCapped]=useState(false);
  useEffect(()=>{
    let cancelled=false;
@@ -49,7 +50,7 @@ export default function PortfolioCockpit(){
        const ids=(members||[]).map(x=>x.account_id);
        if(!ids.length){if(!cancelled){setEntries([]);setTrades([]);setError("");setLoading(false);}return;}
        const [accounts,states,lives,closed]=await Promise.all([
-         supabase.from("accounts").select("id,name,server,login").in("id",ids),
+         supabase.from("accounts").select("id,name,server,login,symbol").in("id",ids),
          supabase.from("account_state").select("account_id,account,risk,ea,positions,orders").in("account_id",ids),
          supabase.from("live").select("account_id,balance,equity,bid,ask,updated_at,open").in("account_id",ids),
          supabase.from("trades").select("id,account_id,ticket,strategy,source,t_close,status,pnl,r,lots,side")
@@ -79,6 +80,9 @@ export default function PortfolioCockpit(){
  const strategies=useMemo(()=>byStrategyPerformance(visibleTrades),[visibleTrades]);
  const insights=useMemo(()=>portfolioInsights(visible,perf),[visible,perf]);
  const curve=useMemo(()=>portfolioClosedCurve(visibleTrades),[visibleTrades]);
+ const filteredEntries=useMemo(()=>activeId==="all"?entries:entries.filter(x=>x.acc.id===activeId),[entries,activeId]);
+ const exposures=useMemo(()=>exposureBySymbol(filteredEntries),[filteredEntries,now]);
+ const correlations=useMemo(()=>strategyDependence(visibleTrades),[visibleTrades]);
  const nTrades=perf.reduce((a,b)=>a+b.trades,0),realized=perf.reduce((a,b)=>a+b.net,0);
  const winners=perf.reduce((a,b)=>a+b.wins,0),wins=nTrades?winners/nTrades:null;
  const displayEquity=totals.usdAccounts&&visible.every(x=>x.connected&&!x.unknown)&&totals.excluded===0?totals.equityUsd:null;
@@ -91,7 +95,7 @@ export default function PortfolioCockpit(){
    {loading&&<LoadingState label="Cargando cartera y cierres registrados…"/>}
    <div className="pi-topbar">
      <div className="pi-tabs" role="tablist" aria-label="Secciones del portafolio">
-       {([["overview","Capital"],["strategies","Estrategias"],["risk","Riesgo"] ] as const).map(([key,label])=>
+       {([["overview","Capital"],["strategies","Estrategias"],["risk","Riesgo"],["dependence","Dependencia"] ] as const).map(([key,label])=>
          <button key={key} role="tab" aria-selected={panel===key} className={panel===key?"on":""} onClick={()=>setPanel(key)}>{label}</button>)}
      </div>
      <label className="pi-account-filter">Cuenta
@@ -181,6 +185,36 @@ export default function PortfolioCockpit(){
            <td>{money(x.stopRisk)}</td><td className={x.unprotected?"sell":""}>{x.unprotected}</td></tr>)}</tbody></table></div>
        <button className="btn sm" onClick={()=>ui.setTab("seguridad")}>Ver conciliación de operaciones</button>
      </section>
+   </>}
+   {panel==="dependence"&&<>
+      <section className="portfolio-list">
+        <header className="pi-section-head"><div><span>GLOBAL RISK ENGINE</span><h2>Exposición simultánea por instrumento</h2></div>
+          <small>Solo posiciones MT5 abiertas, sin ejecutar órdenes</small></header>
+        {!exposures.length&&<p className="premium-note">No hay posiciones abiertas que permitan evaluar exposición simultánea.</p>}
+        {exposures.map(x=><div className="pi-exposure" key={x.symbol}>
+          <div className="pi-exposure-head"><strong>{x.symbol}</strong><span>{x.positionCount} posición(es) · {x.accountCount} cuenta(s)</span></div>
+          <div className="pi-exposure-sides"><div><span>Lotes en compra</span><b className="buy">{x.buyLots.toFixed(2)}</b></div>
+            <div><span>Lotes en venta</span><b className="sell">{x.sellLots.toFixed(2)}</b></div>
+            <div><span>Exposición bruta (USD)*</span><b>{money(x.grossNotionalUsd)}</b></div>
+            <div><span>Exposición neta (USD)*</span><b>{money(x.netNotionalUsd)}</b></div></div>
+          {x.accountCount>1&&<div className="pi-alert warning"><strong>Posible concentración multicuenta</strong>
+            <span>{x.notice} Verifica las configuraciones del copiador y los stops individuales.</span></div>}
+          {x.missingData>0&&<p className="premium-note">Hay {x.missingData} posición(es) con divisa, contrato, cotización o actualización no verificable. Se oculta el nominal total.</p>}
+          <p className="premium-note">Cuentas: {x.accountNames.join(", ")}. Una compra y una venta en cuentas distintas no eliminan las restricciones de pérdida de cada una.</p>
+        </div>)}
+        <p className="premium-note">*Valor nocional aproximado = precio Bid/Ask × volumen × contrato del bróker. No equivale a la pérdida posible al SL. No se convierte entre divisas ni se calcula cuando la telemetría es obsoleta.</p>
+      </section>
+      <section className="portfolio-list">
+        <header className="pi-section-head"><div><span>STRATEGY DEPENDENCY</span><h2>Dependencia histórica entre estrategias</h2></div>
+          <small>Mínimo 20 días con cierres de ambos sistemas</small></header>
+        {!correlations.length?<p className="premium-note">Aún no existen dos estrategias con cierres registrados para comparar.</p>:
+         <div className="pi-table-scroll"><table className="pi-table"><thead><tr><th>Estrategias</th><th>Días compartidos</th><th>Correlación</th><th>Lectura</th></tr></thead>
+           <tbody>{correlations.map(x=><tr key={x.a+"-"+x.b}><td>{x.a} / {x.b}</td>
+             <td>{x.sharedActiveDays}</td>
+             <td>{x.r==null?"N/D":x.r.toFixed(2)}</td><td>{x.status==="observed"?"Estimación descriptiva":"Muestra insuficiente"}</td>
+           </tr>)}</tbody></table></div>}
+        <p className="premium-note">Solo se comparan los días en que ambas estrategias tuvieron cierres. Esto no prueba correlación de entradas intradía ni independencia futura. Con muestras insuficientes no se muestra una correlación fabricada.</p>
+      </section>
    </>}
    <section className="portfolio-list pi-disclaimer">
      <h2>Integridad financiera y alcance</h2>
